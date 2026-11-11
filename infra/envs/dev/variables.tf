@@ -15,3 +15,23 @@ variable "pixel_principal_id" {
   description = "Pixel dev's managed identity (pixel-dev-app), which reads phone-events. Not a secret."
   default     = null
 }
+
+variable "telnyx_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "home_assistant_url" {
+  type    = string
+  default = null
+}
+
+variable "accept_api_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "sentry_enabled" {
+  type    = bool
+  default = false
+}

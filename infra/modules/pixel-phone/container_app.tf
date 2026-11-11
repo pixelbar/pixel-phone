@@ -27,11 +27,26 @@ resource "azurerm_container_app" "this" {
   # var.container_image only seeds the first create.
   lifecycle {
     ignore_changes = [template[0].container[0].image]
+
+    precondition {
+      condition     = var.environment != "dev" || var.home_assistant_ringing_entity == null || endswith(coalesce(var.home_assistant_ringing_entity, "_dev"), "_dev")
+      error_message = "dev must flip a _dev helper, never the real siren's (ADR 0005)."
+    }
   }
 
   identity {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.app.id]
+  }
+
+  # Key Vault references, read with the app's identity when a revision starts.
+  dynamic "secret" {
+    for_each = local.key_vault_secret_ids
+    content {
+      name                = secret.key
+      key_vault_secret_id = secret.value
+      identity            = azurerm_user_assigned_identity.app.id
+    }
   }
 
   template {
@@ -87,6 +102,14 @@ resource "azurerm_container_app" "this" {
         content {
           name  = env.key
           value = env.value
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.app_secret_env
+        content {
+          name        = env.key
+          secret_name = env.value
         }
       }
     }

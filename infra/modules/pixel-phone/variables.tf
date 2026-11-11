@@ -62,3 +62,42 @@ variable "extra_env" {
   description = "Plain (non-secret) environment variables for the container, on top of the ones the module sets."
   default     = {}
 }
+
+# --- Features (infra/secrets.manifest.yaml) -----------------------------------
+# Turn a feature on only after `just secrets-push <env>` has put its secrets in Key
+# Vault: the Container App can't start a revision that references a missing secret.
+
+variable "telnyx_enabled" {
+  type        = bool
+  description = "Telnyx Call Control: references telnyx-api-key and telnyx-public-key."
+  default     = false
+}
+
+variable "home_assistant_url" {
+  type        = string
+  description = "Optional. HOME_ASSISTANT_URL (the Nabu Casa URL). Setting it references home-assistant-token."
+  default     = null
+
+  validation {
+    condition     = var.home_assistant_url == null || can(regex("^https://", var.home_assistant_url))
+    error_message = "home_assistant_url must be an https URL or unset."
+  }
+}
+
+variable "home_assistant_ringing_entity" {
+  type        = string
+  description = "The input_boolean pixel-phone flips while a call rings (ADR 0005). dev must use the _dev helper."
+  default     = null
+}
+
+variable "accept_api_enabled" {
+  type        = bool
+  description = "The accept API: references api-keys-yaml."
+  default     = false
+}
+
+variable "sentry_enabled" {
+  type        = bool
+  description = "Sentry error reporting: references sentry-dsn."
+  default     = false
+}

@@ -131,3 +131,28 @@ tf-apply env *args:
     fi
     terraform -chdir=infra/envs/{{env}} init -backend-config=backend.azurerm.example.hcl -input=false >/dev/null
     terraform -chdir=infra/envs/{{env}} apply -input=false -var-file=terraform.example.tfvars {{args}}
+
+# Validate infra/secrets.manifest.yaml (names only; no Azure login, no values)
+[group('config')]
+validate-secrets:
+    pnpm exec tsx scripts/validate-secrets.ts
+
+# Pull that env's app secrets from Key Vault into .env.<env>, after showing what changes
+[group('config')]
+secrets-pull env:
+    pnpm exec tsx scripts/secrets-sync.ts pull {{env}}
+
+# Push .env.<env>'s app secrets to that env's Key Vault, after showing what changes (never deletes)
+[group('config')]
+secrets-push env:
+    pnpm exec tsx scripts/secrets-sync.ts push {{env}}
+
+# Restart that env's Container App so it reads its secrets again
+[group('config')]
+restart env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{env}}" in dev) rg=pixel-phone-dev ;; prod) rg=pixel-phone-prod ;; *) echo "env must be dev or prod" >&2; exit 1 ;; esac
+    revision="$(az containerapp revision list -g "$rg" -n "$rg" --query "[?properties.active].name | [0]" -o tsv)"
+    az containerapp revision restart -g "$rg" -n "$rg" --revision "$revision" --only-show-errors -o none
+    echo "Restarted $revision."
