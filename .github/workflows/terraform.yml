@@ -1,0 +1,131 @@
+name: Terraform
+
+# Only when the stack, this workflow, the filter file, or the just recipe could
+# change the result. A feature PR that never touches those should not download
+# Terraform. Azure plans run only when Terraform files under infra/ changed
+# (markdown does not count). Skipped plan jobs never start, so they never wait
+# on an Environment. This workflow does not apply. A plan for envs/prod is
+# added with the prod stack (#20).
+on:
+  pull_request:
+    # Positive patterns of the `terraform` list in .github/path-filters.yml
+    # (tests/scripts/path-filters.test.ts keeps these in step). infra/** includes
+    # markdown so the workflow still starts; the inner filter then skips.
+    paths:
+      - "infra/**"
+      - "justfile"
+      - ".github/workflows/terraform.yml"
+      - ".github/path-filters.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - "justfile"
+      - ".github/workflows/terraform.yml"
+      - ".github/path-filters.yml"
+
+# pull-requests: read is for dorny's PR files API (ignored on push).
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      terraform: ${{ steps.filter.outputs.terraform }}
+      stack: ${{ steps.filter.outputs.stack }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: .github/path-filters.yml
+          predicate-quantifier: some-with-excludes
+
+  validate:
+    name: Validate Terraform
+    needs: changes
+    if: ${{ always() && !cancelled() && (needs.changes.result == 'failure' || needs.changes.outputs.terraform == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+
+      - name: Format-check and validate bootstrap and every env stack
+        run: just tf-validate
+
+  plan-dev:
+    name: Plan envs/dev
+    needs: [changes, validate]
+    if: ${{ always() && !cancelled() && needs.validate.result == 'success' && (needs.changes.result == 'failure' || needs.changes.outputs.stack == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+
+      - name: Require ARM_* on GitHub Environment dev
+        env:
+          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+        run: |
+          missing=0
+          if [ -z "${ARM_CLIENT_ID}" ]; then
+            echo "::error::ARM_CLIENT_ID is not set on GitHub Environment dev (variable, not secret)."
+            missing=1
+          fi
+          if [ -z "${ARM_TENANT_ID}" ]; then
+            echo "::error::ARM_TENANT_ID is not set on GitHub Environment dev."
+            missing=1
+          fi
+          if [ -z "${ARM_SUBSCRIPTION_ID}" ]; then
+            echo "::error::ARM_SUBSCRIPTION_ID is not set on GitHub Environment dev."
+            missing=1
+          fi
+          if [ "${missing}" -ne 0 ]; then
+            echo "Fail closed. Validate still ran. Not inventing credentials. This job does not apply."
+            exit 1
+          fi
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Plan infra/envs/dev
+        working-directory: infra/envs/dev
+        run: |
+          terraform init -backend-config=backend.azurerm.example.hcl -input=false
+          terraform plan -input=false -lock=false -var-file=terraform.example.tfvars
