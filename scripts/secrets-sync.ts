@@ -5,7 +5,8 @@
  *
  * It shows what would change, never a value, and asks before writing. A push never
  * deletes, and refuses an env file that says it belongs to the other environment.
- * Needs `az login` and Key Vault Administrator on the vault (the applier gets it).
+ * Needs `az login` and Key Vault Administrator on the vault, which everyone in the
+ * environment's `maintainer_principal_ids` gets (docs/infra.md).
  */
 import { execFile } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
