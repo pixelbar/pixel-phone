@@ -89,3 +89,21 @@ changelog-merge-driver:
 [doc("Cut [Unreleased] into a dated version and bump package.json")]
 bump *args:
     pnpm exec tsx scripts/bump-version.ts {{args}}
+
+# Format-check and validate every Terraform stack (CI runs this when infra/ changes)
+[group('terraform')]
+tf-validate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    terraform fmt -check -recursive infra
+    for stack in infra/bootstrap infra/envs/*/; do
+      [ -d "$stack" ] || continue
+      terraform -chdir="$stack" init -backend=false -input=false >/dev/null
+      terraform -chdir="$stack" validate
+    done
+
+# Run Terraform on the bootstrap stack, e.g. `just tf-bootstrap plan`. Owners only (infra/bootstrap/README.md).
+[group('terraform')]
+tf-bootstrap *args:
+    terraform -chdir=infra/bootstrap init -backend-config=backend.azurerm.example.hcl -input=false >/dev/null
+    terraform -chdir=infra/bootstrap {{args}}
