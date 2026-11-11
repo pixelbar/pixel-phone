@@ -1,0 +1,35 @@
+# dependencies & build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# local env & secrets — never commit tokens
+.env
+.env.*
+!.env.example
+
+# per-env config mirrors written by laptop tools
+config/dev/
+config/prod/
+
+# half-written files from atomic writes
+*.tmp
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.example.tfvars
+backend.azurerm.hcl
+tfplan
+
+# claude
+.claude/worktrees/

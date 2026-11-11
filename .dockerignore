@@ -1,0 +1,15 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+config
+infra
+scripts
+tests
+**/*.tmp
+.git
+.github
+.claude
+docs
+*.md

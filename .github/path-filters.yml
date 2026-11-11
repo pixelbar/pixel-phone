@@ -1,0 +1,60 @@
+# Which expensive CI/CD jobs run for a change.
+# Used by dorny/paths-filter in the workflows (predicate-quantifier:
+# some-with-excludes). tests/scripts/path-filters.test.ts checks this file.
+#
+# Patterns are picomatch globs: `*` stays inside one directory, `**` crosses
+# them, a leading `!` excludes. Markdown-only changes match none of check or
+# image, so they skip just check and Docker. Changing this file itself is in
+# every list (fail closed).
+#
+# check     → just check + just build (ci.yml)
+# image     → Docker smoke (ci.yml) and GHCR (cd.yml)
+# terraform → just tf-validate (terraform.yml)
+# stack     → Azure plans (terraform.yml); markdown under infra/ does not count
+
+check:
+  - "src/**"
+  - "scripts/**"
+  - "tests/**"
+  - "config/**"
+  # vitest.config.ts; Biome lints the rest.
+  - "*.ts"
+  # package.json, biome.json, tsconfig*.json
+  - "*.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "justfile"
+  - ".nvmrc"
+  # Biome skips what git ignores.
+  - ".gitignore"
+  - "Dockerfile"
+  - ".env.example"
+  # Fail closed: a workflow or filter change still runs just check.
+  - ".github/workflows/**"
+  - ".github/path-filters.yml"
+
+# What the Dockerfile copies. Tests live in tests/, outside src/, so they never reach the image.
+image:
+  - "src/**"
+  - "!src/testing/**"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "tsconfig.json"
+  - "tsconfig.build.json"
+  - "Dockerfile"
+  - ".dockerignore"
+  - ".github/path-filters.yml"
+  - ".github/workflows/ci.yml"
+
+# Markdown under infra/ does not change the stack.
+terraform:
+  - "infra/**"
+  - "!infra/**/*.md"
+  - "justfile"
+  - ".github/path-filters.yml"
+
+# Azure plans only. justfile / workflow / filter edits validate but do not plan.
+stack:
+  - "infra/**"
+  - "!infra/**/*.md"
