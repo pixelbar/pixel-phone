@@ -1,0 +1,22 @@
+{
+	"name": "pixel-phone",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Answers the Pixelbar doorbell's Telnyx call, rings the space, and plays a recording when someone accepts",
+	"type": "module",
+	"license": "UNLICENSED",
+	"engines": {
+		"node": ">=24"
+	},
+	"packageManager": "pnpm@12.8.1",
+	"dependencies": {},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.15",
+		"@types/node": "^26.6.4",
+		"@vitest/coverage-v8": "^5.0.3",
+		"tsx": "^4.23.15",
+		"typescript": "^7.0.2",
+		"vitest": "^5.0.3",
+		"yaml": "^2.9.1"
+	}
+}
