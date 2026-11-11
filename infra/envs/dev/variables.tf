@@ -6,7 +6,7 @@ variable "subscription_id" {
 
 variable "container_image" {
   type        = string
-  description = "Seeds the first create only; deploys own the image afterwards. The placeholder listens on port 3000 (WHOAMI_PORT_NUMBER) until the first real deploy."
+  description = "Seeds the first create only; deploys own the image afterwards (just deploy dev, Deploy dev)."
   default     = "docker.io/traefik/whoami:v1.11.0"
 }
 

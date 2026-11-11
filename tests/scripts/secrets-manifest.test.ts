@@ -86,6 +86,12 @@ describe("infra/secrets.manifest.yaml agrees with everything that names a secret
 		for (const secret of manifest.secrets) expect(secret.env in example, secret.env).toBe(true);
 	});
 
+	it("reads every secret's variable in src/config.ts", () => {
+		const config = read("src/config.ts");
+		for (const secret of manifest.secrets)
+			expect(config, secret.env).toMatch(new RegExp(`\\b${secret.env}:`));
+	});
+
 	it("describes every secret in the runbook", () => {
 		const runbook = read("docs/runbook.md");
 		for (const secret of manifest.secrets) {

@@ -57,4 +57,4 @@ The storage account has **shared keys off**, so every data access needs an Azure
 
 ## Images
 
-The Container App is created from `container_image`, then Terraform ignores the image. Deploys swap it with `az containerapp update` ([ADR 0003](adr/0003-container-apps.md)). dev was created with a placeholder (`traefik/whoami`, told to listen on port 3000) until the first real deploy (#6).
+The Container App is created from `container_image`, then Terraform ignores the image. Deploys swap it with `az containerapp update` ([ADR 0003](adr/0003-container-apps.md)). dev was created with a placeholder (`traefik/whoami`, told to listen on port 3000) and has run pixel-phone since the first deploy (#6).

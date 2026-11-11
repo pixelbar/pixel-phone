@@ -46,6 +46,8 @@ image:
   - ".dockerignore"
   - ".github/path-filters.yml"
   - ".github/workflows/ci.yml"
+  - ".github/workflows/cd.yml"
+  - ".github/workflows/deploy-dev.yml"
 
 # Markdown under infra/ does not change the stack.
 terraform:

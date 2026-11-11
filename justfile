@@ -12,7 +12,7 @@ install:
 # Run pixel-phone locally with hot reload
 [group('develop')]
 dev:
-    pnpm exec tsx watch --env-file-if-exists=.env src/index.ts
+    pnpm exec tsx watch --env-file-if-exists=.env --import ./src/instrument.ts src/index.ts
 
 # Compile TypeScript to dist/
 [group('develop')]
@@ -23,7 +23,7 @@ build:
 # Run the compiled build (after `just build`)
 [group('develop')]
 start:
-    node --env-file-if-exists=.env dist/index.js
+    node --env-file-if-exists=.env --import ./dist/instrument.js dist/index.js
 
 # Run tests (pass extra args through, e.g. `just test --watch`)
 [group('develop')]
@@ -139,13 +139,13 @@ validate-secrets:
 
 # Pull that env's app secrets from Key Vault into .env.<env>, after showing what changes
 [group('config')]
-secrets-pull env:
-    pnpm exec tsx scripts/secrets-sync.ts pull {{env}}
+secrets-pull env *args:
+    pnpm exec tsx scripts/secrets-sync.ts pull {{env}} {{args}}
 
 # Push .env.<env>'s app secrets to that env's Key Vault, after showing what changes (never deletes)
 [group('config')]
-secrets-push env:
-    pnpm exec tsx scripts/secrets-sync.ts push {{env}}
+secrets-push env *args:
+    pnpm exec tsx scripts/secrets-sync.ts push {{env}} {{args}}
 
 # Restart that env's Container App so it reads its secrets again
 [group('config')]
@@ -156,3 +156,43 @@ restart env:
     revision="$(az containerapp revision list -g "$rg" -n "$rg" --query "[?properties.active].name | [0]" -o tsv)"
     az containerapp revision restart -g "$rg" -n "$rg" --revision "$revision" --only-show-errors -o none
     echo "Restarted $revision."
+
+# Build this working tree, push it to GHCR as :<sha> (or dev-dirty-<time>) and :dev, and roll
+# pixel-phone-dev onto it. Needs Docker, `az login`, and `gh` with write:packages
+# (gh auth refresh -s write:packages). Never prod: prod ships from the Release workflow.
+[group('deploy')]
+deploy env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{env}}" != dev ]; then echo "just deploy only does dev. Prod ships from the Release workflow." >&2; exit 1; fi
+    image=ghcr.io/pixelbar/pixel-phone
+    sha="$(git rev-parse HEAD)"
+    tag="$sha"
+    if [ -n "$(git status --porcelain)" ]; then tag="dev-dirty-$(date -u +%Y%m%d%H%M%S)"; fi
+    gh auth token | docker login ghcr.io -u "$(gh api user --jq .login)" --password-stdin >/dev/null
+    docker buildx build --platform linux/amd64 --push \
+      --build-arg PIXEL_PHONE_VERSION="$tag" --build-arg PIXEL_PHONE_GIT_SHA="$sha" \
+      -t "$image:$tag" -t "$image:dev" .
+    if docker run --rm --platform linux/amd64 --entrypoint sh "$image:$tag" -c 'test -e /app/.env || ls /app/.env.* >/dev/null 2>&1'; then
+      echo "Image $image:$tag contains an env file. Not deploying it." >&2; exit 1
+    fi
+    app="$(az containerapp show -g pixel-phone-dev -n pixel-phone-dev --query "properties.template.containers[0].env[?name=='PIXEL_PHONE_ENV'].value | [0]" -o tsv)"
+    if [ "$app" != dev ]; then echo "pixel-phone-dev doesn't say PIXEL_PHONE_ENV=dev (got '$app'). Refusing." >&2; exit 1; fi
+    az containerapp update -g pixel-phone-dev -n pixel-phone-dev --image "$image:$tag" --min-replicas 0 --max-replicas 1 --only-show-errors -o none
+    fqdn="$(az containerapp show -g pixel-phone-dev -n pixel-phone-dev --query properties.configuration.ingress.fqdn -o tsv)"
+    echo "Rolled pixel-phone-dev to $image:$tag"
+    for i in $(seq 1 30); do
+      if curl -fsS "https://$fqdn/version" | grep -q "\"$tag\""; then curl -fsS "https://$fqdn/version"; echo; exit 0; fi
+      sleep 5
+    done
+    echo "pixel-phone-dev didn't report $tag within 150 s. Check the revision in the portal." >&2; exit 1
+
+# Run the Deploy dev workflow for a branch, SHA or pull request number (default: this branch)
+[group('deploy')]
+deploy-remote env ref="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{env}}" != dev ]; then echo "Only dev deploys from a branch." >&2; exit 1; fi
+    ref="{{ref}}"; [ -n "$ref" ] || ref="$(git branch --show-current)"
+    gh workflow run deploy-dev.yml --ref main -f ref="$ref"
+    echo "Started Deploy dev for $ref: gh run list --workflow deploy-dev.yml"
