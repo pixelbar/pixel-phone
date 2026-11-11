@@ -1,0 +1,169 @@
+name: Deploy dev
+
+# Puts a branch, commit or pull request of this repository on pixel-phone-dev (Pixel
+# ADR 0018). Started by a person only: Actions → Deploy dev → Run workflow, or
+# `just deploy-remote dev <ref>`. It runs `just check` on that commit, publishes
+# :<sha> and :dev (never :main), and rolls pixel-phone-dev with the dev OIDC identity.
+# No Terraform apply. Never prod.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, commit SHA or pull request number (empty = the branch this runs from)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  resolve:
+    name: Resolve what to deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      sha: ${{ steps.ref.outputs.sha }}
+    steps:
+      - name: Resolve the ref to a commit of this repository
+        id: ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          ref="${REF#\#}"
+          if [ -z "${ref}" ]; then ref="${GITHUB_REF_NAME}"; fi
+          if [[ "${ref}" =~ ^[0-9]+$ ]]; then
+            cross="$(gh pr view "${ref}" -R "${REPO}" --json isCrossRepository --jq .isCrossRepository)"
+            if [ "${cross}" = "true" ]; then
+              echo "::error::Pull request #${ref} comes from a fork. Its code would run with dev's secrets. Push it to a branch here first."
+              exit 1
+            fi
+            ref="$(gh pr view "${ref}" -R "${REPO}" --json headRefOid --jq .headRefOid)"
+          fi
+          sha="$(gh api "repos/${REPO}/commits/${ref}" --jq .sha)"
+          echo "Deploying ${sha}"
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+
+  check:
+    name: just check
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@d9184bf108216479bc5a137cc391f4d7b14c870b # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: just check
+
+  publish:
+    name: Publish GHCR (:sha, :dev)
+    needs: [resolve, check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.sha }}
+            ${{ env.IMAGE_NAME }}:dev
+          build-args: |
+            PIXEL_PHONE_VERSION=${{ needs.resolve.outputs.sha }}
+            PIXEL_PHONE_GIT_SHA=${{ needs.resolve.outputs.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Fail if the image contains an env file
+        env:
+          PIN: ${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.sha }}
+        run: |
+          docker pull "${PIN}"
+          if docker run --rm --entrypoint sh "${PIN}" -c 'test -e /app/.env || ls /app/.env.* >/dev/null 2>&1'; then
+            echo "::error::Image ${PIN} contains an env file. Do not deploy it."
+            exit 1
+          fi
+
+  deploy:
+    name: Roll pixel-phone-dev
+    needs: [resolve, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Roll and wait for the new version
+        env:
+          SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          set -euo pipefail
+          env_name="$(az containerapp show -g pixel-phone-dev -n pixel-phone-dev --query "properties.template.containers[0].env[?name=='PIXEL_PHONE_ENV'].value | [0]" -o tsv)"
+          if [ "${env_name}" != "dev" ]; then
+            echo "::error::pixel-phone-dev doesn't say PIXEL_PHONE_ENV=dev (got '${env_name}'). Refusing."
+            exit 1
+          fi
+          az containerapp update -g pixel-phone-dev -n pixel-phone-dev \
+            --image "${IMAGE_NAME}:${SHA}" --min-replicas 0 --max-replicas 1 --only-show-errors -o none
+          fqdn="$(az containerapp show -g pixel-phone-dev -n pixel-phone-dev --query properties.configuration.ingress.fqdn -o tsv)"
+          for i in $(seq 1 30); do
+            if curl -fsS "https://${fqdn}/version" | grep -q "\"${SHA}\""; then
+              curl -fsS "https://${fqdn}/version"
+              echo "::notice::pixel-phone-dev runs ${SHA}: https://${fqdn}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::pixel-phone-dev didn't report ${SHA} within 150 s."
+          exit 1

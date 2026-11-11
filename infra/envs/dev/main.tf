@@ -16,11 +16,6 @@ module "pixel_phone" {
   home_assistant_ringing_entity = "input_boolean.pixel_phone_ringing_dev"
   accept_api_enabled            = var.accept_api_enabled
   sentry_enabled                = var.sentry_enabled
-
-  extra_env = {
-    # Only the placeholder image reads this; the real service ignores it.
-    WHOAMI_PORT_NUMBER = "3000"
-  }
 }
 
 # The maintainer roles used to follow whoever ran Terraform. They are now keyed by

@@ -4,6 +4,21 @@ How to run pixel-phone. Sections are filled in as the pieces land.
 
 ## Deploying
 
+| What | How |
+| --- | --- |
+| A merge to `main` | CD publishes `ghcr.io/pixelbar/pixel-phone:<sha>` and `:main`, and a Sentry release if `SENTRY_AUTH_TOKEN` is set. It never touches Azure |
+| A branch or PR onto dev | **Actions → Deploy dev → Run workflow**, or `just deploy-remote dev <branch or PR number>`. Runs `just check`, publishes `:<sha>` and `:dev`, and rolls `pixel-phone-dev` |
+| This working tree onto dev | `just deploy dev`. Needs Docker, `az login`, and `gh auth refresh -s write:packages` once |
+| prod | The Release workflow (#20) |
+
+Deploys replace whatever dev runs. Say so in the team chat first.
+
+**Dev URL:** `https://pixel-phone-dev.ashysky-f402cc54.westeurope.azurecontainerapps.io`. The Telnyx webhook is `/webhooks/telnyx` on it.
+
+**Rollback:** `az containerapp update -g pixel-phone-dev -n pixel-phone-dev --image ghcr.io/pixelbar/pixel-phone:<previous sha>`.
+
+**Cold start:** dev scales to zero after about 5 minutes without requests. Measured on 2026-11-11 (image `1234c81`): the first request after scaling to zero took **24.9 s**, and a warm one 0.04 s. That is longer than the 15 s accept window, so a doorbell call arriving while dev is asleep would ring out before the siren started. Fixing it is #29.
+
 ## Secrets
 
 Secrets live in each environment's Key Vault (`pixel-phone-dev-kv`, `pixel-phone-prod-kv`). [`infra/secrets.manifest.yaml`](../infra/secrets.manifest.yaml) is the list. Only `just secrets-push` writes them; Terraform only references them, so no value ever reaches Terraform state.

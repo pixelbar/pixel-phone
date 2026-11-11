@@ -3,7 +3,8 @@
  * infra/secrets.manifest.yaml between the laptop env file (`.env.dev` / `.env.prod`) and
  * that environment's Key Vault. The only writer of these secrets (Pixel ADR 0017).
  *
- * It shows what would change, never a value, and asks before writing. A push never
+ * It shows what would change, never a value, and asks before writing (`--yes` skips the
+ * question on dev only). A push never
  * deletes, and refuses an env file that says it belongs to the other environment.
  * Needs `az login` and Key Vault Administrator on the vault, which everyone in the
  * environment's `maintainer_principal_ids` gets (docs/infra.md).
@@ -57,8 +58,13 @@ function readEnvFile(target: Target): string | undefined {
 	return existsSync(file) ? readFileSync(file, "utf8") : undefined;
 }
 
+/** `--yes` skips the question, for dev only: prod always asks. */
+let assumeYes = false;
+
 async function confirmTarget(target: Target, action: string): Promise<boolean> {
-	if (!ENVS[target].prod) return confirm({ message: `${action} ${target}?`, default: false });
+	if (!ENVS[target].prod) {
+		return assumeYes || confirm({ message: `${action} ${target}?`, default: false });
+	}
 	const typed = await input({ message: `${action} PROD. Type "prod" to go on:` });
 	return typed.trim() === "prod";
 }
@@ -126,9 +132,12 @@ async function pull(target: Target) {
 	process.stdout.write(`Wrote ${ENVS[target].envFile}.\n`);
 }
 
-const [command, env] = process.argv.slice(2);
+const args = process.argv.slice(2);
+assumeYes = args.includes("--yes");
+const [command, env] = args.filter((arg) => arg !== "--yes");
 try {
 	const target = parseTarget(env);
+	if (assumeYes && ENVS[target].prod) throw new Error("--yes is for dev only. Prod always asks.");
 	if (command === "push") await push(target);
 	else if (command === "pull") await pull(target);
 	else throw new Error("Usage: secrets-sync.ts push|pull dev|prod");
