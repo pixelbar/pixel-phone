@@ -56,6 +56,14 @@ In **Settings → Environments**, create `dev` and `prod`. On `prod`, require re
 
 A workflow job that doesn't use the environment can't log in.
 
+Applied values (2026-11-11). Both environments exist, `prod` has a required reviewer and deploys from `main` only:
+
+| Variable | `dev` | `prod` |
+| --- | --- | --- |
+| `ARM_CLIENT_ID` | `67fca063-44cd-487a-bb54-ad71f0d89f12` | `23d9148f-5406-480d-bdc5-3ea295b91383` |
+| `ARM_TENANT_ID` | `2cd2bab0-0dd0-41ff-8f13-592500857ea6` | same |
+| `ARM_SUBSCRIPTION_ID` | `d150e252-e2f0-47fb-8a4a-c3f29e9aebd4` | same |
+
 ## Recover
 
 - **Lost state:** the state account has versioning and soft delete. Restore the previous blob in `pixel-phone-bootstrap`.
