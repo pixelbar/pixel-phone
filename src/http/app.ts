@@ -1,4 +1,4 @@
-import Fastify, { type FastifyBaseLogger, type FastifyInstance } from "fastify";
+import Fastify, { type FastifyBaseLogger, type FastifyInstance, LogController } from "fastify";
 import { z } from "zod";
 import type { Config } from "../config.ts";
 import type { Logger } from "../observability/logger.ts";
@@ -26,7 +26,8 @@ export function buildApp({ config, logger, onApp }: AppDeps): FastifyInstance {
 		// pino's Logger is a FastifyBaseLogger; widening it keeps FastifyInstance's default type.
 		loggerInstance: logger as FastifyBaseLogger,
 		bodyLimit: BODY_LIMIT,
-		disableRequestLogging: true,
+		// Fastify's own per-request lines are off; the onResponse hook below writes one line.
+		logController: new LogController({ disableRequestLogging: true }),
 		// Container Apps' ingress sets X-Forwarded-For.
 		trustProxy: true,
 	});
