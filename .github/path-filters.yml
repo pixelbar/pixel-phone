@@ -52,6 +52,7 @@ terraform:
   - "infra/**"
   - "!infra/**/*.md"
   - "justfile"
+  - ".github/workflows/terraform.yml"
   - ".github/path-filters.yml"
 
 # Azure plans only. justfile / workflow / filter edits validate but do not plan.
