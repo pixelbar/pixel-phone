@@ -272,7 +272,9 @@ function updateCompareLinks(
 		return `${ensureTrailingNewline(body)}\n${unreleasedLine}\n${nextLine}\n${previousLine}\n`;
 	}
 
-	const lines = existingLinks.split("\n");
+	// Link definitions are one contiguous block; a trailing newline would otherwise
+	// leave a blank line before a link appended below.
+	const lines = existingLinks.split("\n").filter((line) => line.trim() !== "");
 	const out: string[] = [];
 	let replacedUnreleased = false;
 	let insertedNext = false;
