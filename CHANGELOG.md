@@ -12,5 +12,6 @@ Until 1.0.0, releases stay on 0.x: `Added` bumps minor, `Fixed`/`Changed` (and t
 ### Added
 
 - The repository, laid out like Pixel's: TypeScript on Node 24, pnpm, Biome, vitest, `just`, and CI that runs `just check`, a Docker build and the changelog check on every pull request (#1).
+- Terraform bootstrap (`just tf-bootstrap`): the `pixel-phone-dev` and `pixel-phone-prod` resource groups, their state containers in the shared `pixelbartfstate` account, and a GitHub Actions identity per environment that logs in with OIDC, with no client secret (#3).
 
 [Unreleased]: https://github.com/pixelbar/pixel-phone/commits/main
