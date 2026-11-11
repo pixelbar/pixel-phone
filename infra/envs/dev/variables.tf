@@ -15,3 +15,9 @@ variable "pixel_principal_id" {
   description = "Pixel dev's managed identity (pixel-dev-app), which reads phone-events. Not a secret."
   default     = null
 }
+
+variable "maintainer_principal_ids" {
+  type        = map(string)
+  description = "Maintainers who may push secrets and recordings to dev, as name => Entra ID user object ID. Not secrets."
+  default     = {}
+}
