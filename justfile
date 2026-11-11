@@ -169,11 +169,6 @@ deploy env:
     sha="$(git rev-parse HEAD)"
     tag="$sha"
     if [ -n "$(git status --porcelain)" ]; then tag="dev-dirty-$(date -u +%Y%m%d%H%M%S)"; fi
-    # A throwaway Docker config, so the GHCR login never lands in a keychain or ~/.docker
-    # (and works where the keychain can't prompt). Deleted on exit.
-    export DOCKER_CONFIG="$(mktemp -d)"
-    trap 'rm -rf "$DOCKER_CONFIG"' EXIT
-    echo '{}' > "$DOCKER_CONFIG/config.json"
     gh auth token | docker login ghcr.io -u "$(gh api user --jq .login)" --password-stdin >/dev/null
     docker buildx build --platform linux/amd64 --push \
       --build-arg PIXEL_PHONE_VERSION="$tag" --build-arg PIXEL_PHONE_GIT_SHA="$sha" \
