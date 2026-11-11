@@ -169,7 +169,14 @@ deploy env:
     sha="$(git rev-parse HEAD)"
     tag="$sha"
     if [ -n "$(git status --porcelain)" ]; then tag="dev-dirty-$(date -u +%Y%m%d%H%M%S)"; fi
-    gh auth token | docker login ghcr.io -u "$(gh api user --jq .login)" --password-stdin >/dev/null
+    # The GHCR login goes in a private, throwaway Docker config, deleted on exit. Writing it
+    # there (instead of `docker login`) also stops Docker on macOS from falling back to the
+    # keychain, which a headless session can't use.
+    export DOCKER_CONFIG="$(mktemp -d)"
+    trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+    ( umask 077; printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' \
+        "$(printf '%s:%s' "$(gh api user --jq .login)" "$(gh auth token)" | base64 | tr -d '\n')" \
+        > "$DOCKER_CONFIG/config.json" )
     docker buildx build --platform linux/amd64 --push \
       --build-arg PIXEL_PHONE_VERSION="$tag" --build-arg PIXEL_PHONE_GIT_SHA="$sha" \
       -t "$image:$tag" -t "$image:dev" .
