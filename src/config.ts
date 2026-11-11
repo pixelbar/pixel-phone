@@ -119,11 +119,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 	const problems: string[] = [];
 
 	const telnyx = allOrNone(data, ["TELNYX_API_KEY", "TELNYX_PUBLIC_KEY"], problems);
-	const homeAssistant = allOrNone(
-		data,
-		["HOME_ASSISTANT_URL", "HOME_ASSISTANT_TOKEN", "HOME_ASSISTANT_RINGING_ENTITY"],
-		problems,
-	);
+	// The URL and token switch Home Assistant on. The entity may be set on its own:
+	// Terraform always pins dev's to the _dev helper, before Home Assistant is set up.
+	const homeAssistant = allOrNone(data, ["HOME_ASSISTANT_URL", "HOME_ASSISTANT_TOKEN"], problems);
+	if (homeAssistant && data.HOME_ASSISTANT_RINGING_ENTITY === undefined) {
+		problems.push(
+			"HOME_ASSISTANT_RINGING_ENTITY must be set when Home Assistant is (HOME_ASSISTANT_URL)",
+		);
+	}
 	// dev never touches the real siren (ADR 0005).
 	if (
 		data.PIXEL_PHONE_ENV !== "prod" &&

@@ -73,9 +73,20 @@ describe("loadConfig", () => {
 	it("needs Telnyx's and Home Assistant's settings together", () => {
 		expect(problem({ TELNYX_API_KEY: FAKE_KEY })).toMatch(/TELNYX_PUBLIC_KEY must be set together/);
 		expect(problem({ HOME_ASSISTANT_URL: HA.HOME_ASSISTANT_URL })).toMatch(
-			/HOME_ASSISTANT_TOKEN, HOME_ASSISTANT_RINGING_ENTITY must be set together/,
+			/HOME_ASSISTANT_TOKEN must be set together/,
+		);
+		expect(problem({ ...HA, HOME_ASSISTANT_RINGING_ENTITY: undefined })).toMatch(
+			/HOME_ASSISTANT_RINGING_ENTITY must be set when Home Assistant is/,
 		);
 		expect(problem({ TELNYX_API_KEY: FAKE_KEY })).not.toContain(FAKE_KEY);
+	});
+
+	it("accepts the ringing entity on its own, as Terraform sets it on dev before Home Assistant is", () => {
+		const config = loadConfig({
+			PIXEL_PHONE_ENV: "dev",
+			HOME_ASSISTANT_RINGING_ENTITY: HA.HOME_ASSISTANT_RINGING_ENTITY,
+		});
+		expect(config.homeAssistant).toBeUndefined();
 	});
 
 	it("keeps dev and local off the real siren", () => {
