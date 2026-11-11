@@ -8,3 +8,9 @@ telnyx_enabled     = false
 accept_api_enabled = false
 sentry_enabled     = false
 # home_assistant_url = "https://<instance>.ui.nabu.casa"
+
+# Who may run just secrets-push and just media push against dev. Find an object ID
+# with: az ad user show --id <upn> --query id -o tsv
+maintainer_principal_ids = {
+  ninjalikescheez = "c98fe67e-0682-49d6-85cf-cc9946647392" # NinjaLikesCheez@pixelbar.nl
+}

@@ -207,6 +207,31 @@ describe("applyRelease", () => {
 		expect(result.changelog).not.toMatch(/## \[Unreleased\][\s\S]*### Added[\s\S]*## \[0\.2\.0\]/);
 	});
 
+	it("keeps the link footer contiguous on the first release", () => {
+		const first = `# Changelog
+
+## [Unreleased]
+
+### Added
+
+- The first thing.
+
+[Unreleased]: https://github.com/pixelbar/pixel-phone/commits/main
+`;
+		const result = applyRelease(first, "0.0.0", "2026-11-11");
+		expect(
+			result.changelog.endsWith(
+				[
+					"[Unreleased]: https://github.com/pixelbar/pixel-phone/compare/v0.1.0...HEAD",
+					"[0.1.0]: https://github.com/pixelbar/pixel-phone/compare/v0.0.0...v0.1.0",
+					"[0.0.0]: https://github.com/pixelbar/pixel-phone/releases/tag/v0.0.0",
+					"",
+				].join("\n"),
+			),
+		).toBe(true);
+		expect(result.changelog).not.toMatch(/\]: \S+\n\n\[/);
+	});
+
 	it("is a no-op when Unreleased has no items", () => {
 		const empty = SAMPLE.replace(
 			"## [Unreleased]\n\n### Added\n\n- A new command.\n\n### Fixed\n\n- A reply that lied.\n",
