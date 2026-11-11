@@ -17,7 +17,7 @@ Deploys replace whatever dev runs. Say so in the team chat first.
 
 **Rollback:** `az containerapp update -g pixel-phone-dev -n pixel-phone-dev --image ghcr.io/pixelbar/pixel-phone:<previous sha>`.
 
-**Cold start:** dev scales to zero after a few minutes without requests. See the measurement below.
+**Cold start:** dev scales to zero after about 5 minutes without requests. Measured on 2026-11-11 (image `1234c81`): the first request after scaling to zero took **24.9 s**, and a warm one 0.04 s. That is longer than the 15 s accept window, so a doorbell call arriving while dev is asleep would ring out before the siren started. Fixing it is #29.
 
 ## Secrets
 
