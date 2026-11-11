@@ -10,6 +10,13 @@ module "pixel_phone" {
   maintainer_principal_ids = var.maintainer_principal_ids
   purge_protection_enabled = false
 
+  # Features: turn each on only after `just secrets-push dev` (infra/secrets.manifest.yaml).
+  telnyx_enabled                = var.telnyx_enabled
+  home_assistant_url            = var.home_assistant_url
+  home_assistant_ringing_entity = "input_boolean.pixel_phone_ringing_dev"
+  accept_api_enabled            = var.accept_api_enabled
+  sentry_enabled                = var.sentry_enabled
+
   extra_env = {
     # Only the placeholder image reads this; the real service ignores it.
     WHOAMI_PORT_NUMBER = "3000"

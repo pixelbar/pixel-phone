@@ -16,6 +16,26 @@ variable "pixel_principal_id" {
   default     = null
 }
 
+variable "telnyx_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "home_assistant_url" {
+  type    = string
+  default = null
+}
+
+variable "accept_api_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "sentry_enabled" {
+  type    = bool
+  default = false
+}
+
 variable "maintainer_principal_ids" {
   type        = map(string)
   description = "Maintainers who may push secrets and recordings to dev, as name => Entra ID user object ID. Not secrets."
