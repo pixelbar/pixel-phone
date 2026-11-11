@@ -57,12 +57,13 @@ CHANGELOG.md        # Keep a Changelog 1.1.0; most PRs add an Unreleased entry
 - **TypeScript on Node 24, ESM only.** Strict, no `any`. All user-facing text (recordings' scripts, Pixel messages, docs) is English.
 - **Dependency direction:** `http → core ← adapters`. `core` imports nothing from other folders. A platform SDK (Telnyx, Azure, Home Assistant's API) is used only in its adapter. When the core needs something from a platform, it defines a port and the adapter implements it.
 - **Fail closed and fail quiet.** Every outbound call has a time limit. No retries on anything that changes a call, except Telnyx commands sent with a `command_id`, which Telnyx de-duplicates.
-- **Logging:** pino is the only logger. No `console.log`. Never log secrets, tokens, API keys or signature headers. Phone numbers may be logged: nearly every call comes from the doorbell (ADR on observability).
+- **Logging:** pino is the only logger. No `console.log`. Never log secrets, tokens, API keys or signature headers. Phone numbers may be logged: nearly every call comes from the doorbell ([ADR 0009](docs/adr/0009-sentry-pino-and-phone-numbers.md)).
 - **Tests** use fakes from `src/testing/` and never call live Telnyx, Home Assistant or Azure. Storage adapters are tested against Azurite.
 - **Changelog:** every PR with user or operator impact adds a line under `## [Unreleased]`. Pure chores use the `skip-changelog` label.
 
 ## Security
 
+- **Why calls go unanswered until an accept:** [ADR 0002](docs/adr/0002-answer-only-on-accept.md).
 - Webhooks from Telnyx are accepted only with a valid Ed25519 signature over the raw body, within the replay window.
 - The accept API answers a call, so it needs a bearer API key, compared in constant time. Changes to `src/http/auth*`, the webhook signature check, or the accept route need tests and a human reviewer. Call that out in the PR description.
 - Secrets live in Key Vault, listed in `infra/secrets.manifest.yaml`. Never put a secret in the image, in Terraform state, in a test fixture that looks real, or in a log.
