@@ -14,6 +14,29 @@ describe("scrubString", () => {
 		);
 		expect(scrubString("from +31201234567")).toBe("from +31201234567");
 	});
+
+	it("keeps a serialized JSON log line valid", () => {
+		const line = JSON.stringify({
+			msg: 'sent "Bearer abc123" to https://x/y?sig=abc%2F" and "' + JWT + '"',
+		});
+		const scrubbed = scrubString(line);
+		expect(JSON.parse(scrubbed)).toEqual({
+			msg: 'sent "Bearer [redacted]" to https://x/y?sig=[redacted]" and "[redacted-token]"',
+		});
+	});
+
+	it("scrubs a long run of eyJ in linear time", () => {
+		const hostile = "eyJ".repeat(21_800); // about the 64 KB webhook body limit
+		const started = performance.now();
+		expect(scrubString(hostile)).toBe(hostile);
+		// Quadratic matching took over two seconds here; linear takes a millisecond or two.
+		expect(performance.now() - started).toBeLessThan(200);
+	});
+
+	it("still finds a JWT after punctuation", () => {
+		expect(scrubString(`token=${JWT}`)).toBe("token=[redacted-token]");
+		expect(scrubString(`"${JWT}"`)).toBe('"[redacted-token]"');
+	});
 });
 
 describe("scrubDeep", () => {

@@ -8,11 +8,15 @@ const PATTERNS: readonly [RegExp, string][] = [
 	// Telnyx v2 API keys: KEY<hex>_<random>.
 	[/KEY[0-9A-Fa-f]{16,}_[A-Za-z0-9]{8,}/g, "[redacted-telnyx-key]"],
 	// Home Assistant long-lived tokens are JWTs: three base64url parts, the first starting "eyJ".
-	[/eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}/g, "[redacted-token]"],
-	// A bearer credential in a header or message.
-	[/(Bearer\s+)[^\s"',]+/gi, "$1[redacted]"],
+	// The lookbehind starts a match only at the start of a run of token characters, so
+	// a long run of "eyJeyJ..." is scanned once rather than once per "eyJ" (quadratic).
+	[/(?<![\w-])eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}/g, "[redacted-token]"],
+	// A bearer credential in a header or message. The value stops at a backslash too:
+	// streamWrite sees serialized JSON, where a quote is escaped as \", and eating the
+	// backslash would leave a bare quote that ends the string early.
+	[/(Bearer\s+)[^\s"',\\]+/gi, "$1[redacted]"],
 	// The signature of a SAS URL: anyone holding it can read the blob until it expires.
-	[/([?&]sig=)[^&\s"'<>]+/gi, "$1[redacted]"],
+	[/([?&]sig=)[^&\s"'<>\\]+/gi, "$1[redacted]"],
 ];
 
 export function scrubString(input: string): string {
