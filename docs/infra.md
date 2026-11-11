@@ -50,10 +50,12 @@ The storage account has **shared keys off**, so every data access needs an Azure
 | App | Storage Blob Data Reader | container `media` (it can't change recordings) |
 | App | Storage Blob Delegator | the account (to sign user-delegation SAS URLs) |
 | Pixel (`pixel-ENV-app`) | Storage Queue Data Message Processor | queue `phone-events` only |
-| The maintainer who applies | Key Vault Administrator | the vault (`just secrets-push`) |
-| The maintainer who applies | Storage Blob Data Contributor | container `media` (`just media push`) |
+| Each of `maintainer_principal_ids` | Key Vault Administrator | the vault (`just secrets-push`) |
+| Each of `maintainer_principal_ids` | Storage Blob Data Contributor | container `media` (`just media push`) |
 | GitHub `pixel-phone-github-ENV` | Contributor | resource group `pixel-phone-ENV` |
 | GitHub `pixel-phone-github-ENV` | Storage Blob Data Contributor | state container `pixel-phone-ENV` |
+
+Maintainers are listed by name in each environment's `maintainer_principal_ids` (in `terraform.example.tfvars`), not taken from whoever runs Terraform, so a plan from CI and an apply from any laptop agree. To add one, add their Entra ID object ID there and apply.
 
 ## Images
 

@@ -35,3 +35,9 @@ variable "sentry_enabled" {
   type    = bool
   default = false
 }
+
+variable "maintainer_principal_ids" {
+  type        = map(string)
+  description = "Maintainers who may push secrets and recordings to dev, as name => Entra ID user object ID. Not secrets."
+  default     = {}
+}

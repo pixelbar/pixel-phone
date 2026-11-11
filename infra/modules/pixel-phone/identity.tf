@@ -61,19 +61,30 @@ resource "azurerm_role_assignment" "pixel_queue_processor" {
   depends_on                       = [azurerm_storage_queue.events]
 }
 
-# --- Whoever applies this stack (a maintainer, from a laptop) -------------------
+# --- Maintainers, listed by name (not whoever happens to run Terraform) --------
+#
+# Keyed on a fixed list so a plan is the same from CI, which logs in as
+# pixel-phone-github-ENV, and from any maintainer's laptop. Taking the caller's
+# object_id instead would hand these roles to whoever applied last and take them
+# from everyone else.
 
 # just secrets-push writes the app's secrets.
-resource "azurerm_role_assignment" "applyer_kv_admin" {
+resource "azurerm_role_assignment" "maintainer_kv_admin" {
+  for_each = var.maintainer_principal_ids
+
   scope                = azurerm_key_vault.this.id
   role_definition_name = "Key Vault Administrator"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = each.value
+  principal_type       = "User"
 }
 
 # just media push uploads recordings.
-resource "azurerm_role_assignment" "applyer_media" {
+resource "azurerm_role_assignment" "maintainer_media" {
+  for_each = var.maintainer_principal_ids
+
   scope                = local.media_scope
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = each.value
+  principal_type       = "User"
   depends_on           = [azurerm_storage_container.media]
 }

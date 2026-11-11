@@ -45,6 +45,12 @@ variable "pixel_principal_id" {
   default     = null
 }
 
+variable "maintainer_principal_ids" {
+  type        = map(string)
+  description = "Maintainers who push secrets and recordings, as name => Entra ID user object ID. Each gets Key Vault Administrator on the vault and Storage Blob Data Contributor on media. Not secrets."
+  default     = {}
+}
+
 variable "log_retention_days" {
   type        = number
   description = "Log Analytics retention."
