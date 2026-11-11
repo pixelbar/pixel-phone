@@ -107,3 +107,27 @@ tf-validate:
 tf-bootstrap *args:
     terraform -chdir=infra/bootstrap init -backend-config=backend.azurerm.example.hcl -input=false >/dev/null
     terraform -chdir=infra/bootstrap {{args}}
+
+# Plan an env stack (dev or prod). Needs Azure CLI signed in. Does not apply.
+[group('terraform')]
+tf-plan env *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{env}}" in dev|prod) ;; *) echo "env must be dev or prod" >&2; exit 1 ;; esac
+    terraform -chdir=infra/envs/{{env}} init -backend-config=backend.azurerm.example.hcl -input=false >/dev/null
+    terraform -chdir=infra/envs/{{env}} plan -input=false -var-file=terraform.example.tfvars {{args}}
+
+# Apply an env stack. Maintainers only, from a laptop. Coding agents must not apply
+# prod: it refuses unless PIXEL_PHONE_APPLY_PROD=1.
+[group('terraform')]
+[doc("Apply an env stack (maintainers only; prod needs PIXEL_PHONE_APPLY_PROD=1)")]
+tf-apply env *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{env}}" in dev|prod) ;; *) echo "env must be dev or prod" >&2; exit 1 ;; esac
+    if [ "{{env}}" = prod ] && [ "${PIXEL_PHONE_APPLY_PROD:-}" != 1 ]; then
+      echo "Refusing to apply prod without PIXEL_PHONE_APPLY_PROD=1." >&2
+      exit 1
+    fi
+    terraform -chdir=infra/envs/{{env}} init -backend-config=backend.azurerm.example.hcl -input=false >/dev/null
+    terraform -chdir=infra/envs/{{env}} apply -input=false -var-file=terraform.example.tfvars {{args}}
