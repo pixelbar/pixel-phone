@@ -5,6 +5,7 @@ import {
 	desiredApplication,
 	formatPlan,
 	hasChanges,
+	isHostname,
 	loadTelnyxEnvFile,
 	makePlan,
 	parseTelnyxEnvFile,
@@ -39,6 +40,15 @@ describe("config/telnyx.<env>.yaml", () => {
 		expect(() => parseTelnyxEnvFile("host: https://x.example.com")).toThrow(/bare hostname/);
 		expect(() => parseTelnyxEnvFile("nubmers: []")).toThrow(/invalid/);
 		expect(parseTelnyxEnvFile("").numbers).toEqual([]);
+	});
+});
+
+describe("isHostname", () => {
+	it("accepts a hostname and refuses what az prints for nothing", () => {
+		expect(isHostname(HOST)).toBe(true);
+		expect(isHostname("None")).toBe(false);
+		expect(isHostname("")).toBe(false);
+		expect(isHostname("https://x.example.com")).toBe(false);
 	});
 });
 
