@@ -27,6 +27,8 @@ const schema = z.object({
 	// Telnyx Call Control (secrets: telnyx-api-key, telnyx-public-key)
 	TELNYX_API_KEY: text.optional(),
 	TELNYX_PUBLIC_KEY: text.optional(),
+	// Local only: where Call Control commands go (the harness's fake Telnyx, #17).
+	TELNYX_API_URL: z.url({ protocol: /^https?$/ }).optional(),
 
 	// Home Assistant (secret: home-assistant-token)
 	HOME_ASSISTANT_URL: z.url({ protocol: /^https?$/ }).optional(),
@@ -60,7 +62,7 @@ const schema = z.object({
 
 type Env = z.infer<typeof schema>;
 
-export type TelnyxConfig = { apiKey: string; publicKey: string };
+export type TelnyxConfig = { apiKey: string; publicKey: string; apiUrl?: string };
 export type HomeAssistantConfig = { url: string; token: string; ringingEntity: string };
 export type SentryConfig = {
 	dsn: string;
@@ -165,6 +167,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		if (data.AZURE_STORAGE_ACCOUNT_NAME === undefined) {
 			problems.push(`AZURE_STORAGE_ACCOUNT_NAME must be set in ${data.PIXEL_PHONE_ENV}`);
 		}
+		if (data.TELNYX_API_URL !== undefined) problems.push("TELNYX_API_URL is for local runs only");
 		if (data.AZURE_STORAGE_CONNECTION_STRING !== undefined) {
 			problems.push("AZURE_STORAGE_CONNECTION_STRING is for local runs only");
 		}
@@ -183,7 +186,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		recordingAccepted: data.RECORDING_ACCEPTED,
 		...(data.PIXEL_PHONE_GIT_SHA ? { gitSha: data.PIXEL_PHONE_GIT_SHA } : {}),
 		...(telnyx && data.TELNYX_API_KEY && data.TELNYX_PUBLIC_KEY
-			? { telnyx: { apiKey: data.TELNYX_API_KEY, publicKey: data.TELNYX_PUBLIC_KEY } }
+			? {
+					telnyx: {
+						apiKey: data.TELNYX_API_KEY,
+						publicKey: data.TELNYX_PUBLIC_KEY,
+						...(data.TELNYX_API_URL ? { apiUrl: data.TELNYX_API_URL } : {}),
+					},
+				}
 			: {}),
 		...(homeAssistant &&
 		data.HOME_ASSISTANT_URL &&

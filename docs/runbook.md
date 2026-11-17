@@ -84,6 +84,34 @@ Every request to `/webhooks/telnyx` must carry a valid Ed25519 signature (`telny
 
 Event IDs are kept in the `WebhookEvents` table for two days, then pruned.
 
+## Testing a real call on dev
+
+What has to be in place, once:
+
+| | How | Check |
+| --- | --- | --- |
+| The app is deployed | `just deploy dev` (or **Deploy dev** for a branch) | `curl https://<dev url>/version` shows the commit |
+| Telnyx points at dev | `just telnyx-sync dev` | `just telnyx-sync dev --check` passes |
+| A recording | `just media push dev media/placeholder-accepted.wav --name accepted.wav` | `just media list dev` |
+| An accept key | `just api-key home-assistant` → `API_KEYS_YAML` in `.env.dev` → `just secrets-push dev`; `accept_api_enabled = true`; `just tf-apply dev` | `curl -X POST -H "Authorization: Bearer $KEY" https://<dev url>/api/v1/calls/current/accept` answers 404 |
+| Home Assistant (optional) | [Connecting an environment](#connecting-an-environment) | the `_dev` helper flips during a call |
+
+Then:
+
+1. **Missed call.** Call `+31103024128` from a phone and don't accept. You hear ringing; after 15 s nothing changes (no command was sent), and the logs show `call.ringing` then `call.missed` (`reason: timeout`). Hang up.
+2. **Caller hangs up.** Call, hang up within 15 s: `call.missed` with `reason: caller_hung_up`.
+3. **Accepted.** Call, and within 15 s run the accept `curl` above. It answers `202 {"callId":…}`; the phone is picked up and plays the test recording, then hangs up. Logs: `call.ringing`, `accept.accepted`, `call.accepted`, `call.answered_by_telnyx`, `call.ended` (`reason: playback_finished`).
+4. **Too late.** Call, wait 16 s, accept: `410`, and the phone keeps ringing.
+5. **Busy.** While one call rings, call from a second phone: `call.busy`; the second call just rings.
+
+Reading the logs:
+
+```sh
+az containerapp logs show -g pixel-phone-dev -n pixel-phone-dev --follow --format text | grep -E '"event":"(call|accept|telnyx|home-assistant|queue|media)\.'
+```
+
+Every outcome is one `call.<outcome>` line with `callId`, `from`, `to` and `via`/`by`. A failing dependency is `<area>.failed` and a Sentry issue tagged `area`.
+
 ## Calls
 
 Each call is a row in the `Calls` table: partition = the UTC day, row = the call ID (`20261118-3f9a1c2b7d4e`). Rows are kept 90 days. The states are in the [README](../README.md#call-states).
@@ -204,3 +232,17 @@ Without `home_assistant_url`, pixel-phone logs `ringer.off` instead of ringing.
 | `didn't get through (TimeoutError)` | Home Assistant or Nabu Casa is down or slow |
 
 ## When the doorbell doesn't ring
+
+Work from the outside in. Nothing here ever answers a call by itself: doing nothing lets the call ring out and OpenR try its next number.
+
+| Symptom | Look at | Likely cause and fix |
+| --- | --- | --- |
+| No `telnyx.webhook` lines at all | `curl https://<url>/healthz`; Telnyx portal → the app → webhook URL; `just telnyx-sync <env> --check` | App down (roll back, see [Deploying](#deploying)), or the webhook URL drifted (`just telnyx-sync <env>`) |
+| `telnyx.webhook_rejected` with `bad_signature` | Key Vault `telnyx-public-key` | Public key wrong: copy it from the portal, `just secrets-push`, `just restart` |
+| `call.busy` for every call | `Calls` table: is a call stuck `ringing`/`accepting`? | Stuck calls retire on their own (15 s / 3 min). If not, `just restart <env>` recovers them |
+| `call.ringing` but no siren | `home-assistant.failed` lines | Token or helper (see [Home Assistant](#home-assistant)). If HA flipped the helper, it's HA's automation |
+| `call.ringing` but nothing in Discord | `queue.failed` lines; Pixel's logs | Queue unreachable, or Pixel isn't polling |
+| Accept answers 202 but the phone isn't picked up | `telnyx.failed` with `during: answer` | Telnyx API key wrong or expired; the call rings out. Fix the key, push, restart |
+| Picked up but silent, then hangs up | `media.failed` | Recording missing (`just media list`) or the app can't sign URLs (Storage Blob Delegator) |
+| `call.missed` with `caller_hung_up` straight away | The caller hung up, or OpenR's ring time is short | See OpenR's ring time under [Calls](#calls) |
+

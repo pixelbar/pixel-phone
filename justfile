@@ -219,7 +219,7 @@ deploy env:
     fi
     app="$(az containerapp show -g pixel-phone-dev -n pixel-phone-dev --query "properties.template.containers[0].env[?name=='PIXEL_PHONE_ENV'].value | [0]" -o tsv)"
     if [ "$app" != dev ]; then echo "pixel-phone-dev doesn't say PIXEL_PHONE_ENV=dev (got '$app'). Refusing." >&2; exit 1; fi
-    az containerapp update -g pixel-phone-dev -n pixel-phone-dev --image "$image:$tag" --min-replicas 0 --max-replicas 1 --only-show-errors -o none
+    az containerapp update -g pixel-phone-dev -n pixel-phone-dev --image "$image:$tag" --min-replicas 1 --max-replicas 1 --only-show-errors -o none
     fqdn="$(az containerapp show -g pixel-phone-dev -n pixel-phone-dev --query properties.configuration.ingress.fqdn -o tsv)"
     echo "Rolled pixel-phone-dev to $image:$tag"
     for i in $(seq 1 30); do

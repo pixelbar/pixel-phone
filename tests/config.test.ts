@@ -98,6 +98,18 @@ describe("loadConfig", () => {
 		expect(message).not.toContain("tooshort");
 	});
 
+	it("allows a local Telnyx API URL, and only locally", () => {
+		const telnyx = {
+			TELNYX_API_KEY: FAKE_KEY,
+			TELNYX_PUBLIC_KEY: "k",
+			TELNYX_API_URL: "http://127.0.0.1:4010",
+		};
+		expect(loadConfig(telnyx).telnyx?.apiUrl).toBe("http://127.0.0.1:4010");
+		expect(problem({ ...telnyx, PIXEL_PHONE_ENV: "dev", AZURE_STORAGE_ACCOUNT_NAME: "x" })).toMatch(
+			/TELNYX_API_URL is for local runs only/,
+		);
+	});
+
 	it("needs a storage account outside local, and Azurite only locally", () => {
 		expect(problem({ PIXEL_PHONE_ENV: "dev" })).toMatch(/AZURE_STORAGE_ACCOUNT_NAME must be set/);
 		expect(
