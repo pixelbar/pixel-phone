@@ -60,7 +60,7 @@ sequenceDiagram
 | --- | --- |
 | [0001](adr/0001-typescript-ports-and-adapters.md) | TypeScript, ports and adapters, fastify |
 | [0002](adr/0002-answer-only-on-accept.md) | Telnyx Call Control, and we answer only on accept |
-| [0003](adr/0003-container-apps.md) | Azure Container Apps, scale to zero, public ingress, two environments |
+| [0003](adr/0003-container-apps.md) | Azure Container Apps, one always-warm replica (amended by #29), public ingress, two environments |
 | [0004](adr/0004-call-state-in-table-storage.md) | Call state in Table storage, one call at a time, first accept wins |
 | [0005](adr/0005-home-assistant-owns-the-siren.md) | Home Assistant owns the siren |
 | [0006](adr/0006-pixel-through-a-storage-queue.md) | Pixel through an Azure Storage Queue |

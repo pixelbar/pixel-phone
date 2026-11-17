@@ -11,7 +11,7 @@ The siren and the button are in the space and will be Home Assistant devices, pr
 ## Decision
 
 - **pixel-phone only flips a helper:** `input_boolean.pixel_phone_ringing` goes on when a call starts ringing and off when it leaves `ringing`, however it leaves. Home Assistant's automations decide whether the siren sounds, and silence it.
-- **Over the REST API** (`/api/services/input_boolean/turn_on|turn_off`), not WebSocket. pixel-phone is short-lived and scales to zero; a request per change is simpler than holding a socket.
+- **Over the REST API** (`/api/services/input_boolean/turn_on|turn_off`), not WebSocket. A request per change is simpler than holding a socket, which would need reconnecting and watching.
 - **Through the Nabu Casa URL** for now, with a long-lived token for a **non-admin** Home Assistant user.
 - **The button reaches pixel-phone, not the other way round.** A Home Assistant automation calls pixel-phone's accept API with its own API key (ADR 0006 describes the API's other caller).
 - **dev flips `input_boolean.pixel_phone_ringing_dev`,** which nothing is attached to. Config validation refuses the prod entity in dev.
