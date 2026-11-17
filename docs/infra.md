@@ -52,6 +52,8 @@ The storage account has **shared keys off**, so every data access needs an Azure
 | Pixel (`pixel-ENV-app`) | Storage Queue Data Message Processor | queue `phone-events` only |
 | Each of `maintainer_principal_ids` | Key Vault Administrator | the vault (`just secrets-push`) |
 | Each of `maintainer_principal_ids` | Storage Blob Data Contributor | container `media` (`just media push`) |
+| Each of `maintainer_principal_ids` | Storage Table Data Reader | the account's tables (reading `Calls` in the runbook) |
+| Each of `maintainer_principal_ids` | Storage Queue Data Reader | queue `phone-events` (peeking at events) |
 | GitHub `pixel-phone-github-ENV` | Contributor | resource group `pixel-phone-ENV` |
 | GitHub `pixel-phone-github-ENV` | Storage Blob Data Contributor | state container `pixel-phone-ENV` |
 

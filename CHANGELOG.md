@@ -22,6 +22,8 @@ Until 1.0.0, releases stay on 0.x: `Added` bumps minor, `Fixed`/`Changed` (and t
 - A Telnyx Call Control client behind a `Telephony` port: answer, play and hang up, each with a `command_id`, a five-second limit and one retry on a network error only. A call that has already ended comes back as `CallGone` (#10).
 - The call state machine and its store (the `Calls` table): a call rings until someone accepts, the 15-second window ends (`ACCEPT_WINDOW_SECONDS`) or the caller hangs up; a second call while one is active is busy. The first accept wins, with conditional writes so two at once can't both win. Calls left ringing by a restart are marked missed on startup (#11).
 - A Home Assistant ringer: turns the ringing helper on and off through HA's API, with a three-second limit and no retry. Without Home Assistant configured it only logs (#12).
+- Call events for Pixel, contract v1 (`docs/events.md`, JSON Schema from `just events-schema`): `ringing`, `accepted`, `missed`, `busy` and `ended`, sent as plain JSON to the `phone-events` queue with a five-minute TTL and a three-second limit (#13).
+- Maintainers can read the `Calls` table and peek at `phone-events` for debugging (#13).
 
 ### Changed
 

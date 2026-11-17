@@ -143,6 +143,11 @@ tf-apply env *args:
     terraform -chdir=infra/envs/{{env}} init -backend-config=backend.azurerm.example.hcl -input=false >/dev/null
     terraform -chdir=infra/envs/{{env}} apply -input=false -var-file=terraform.example.tfvars {{args}}
 
+# Write the call event contract (src/core/events.ts) to docs/events.schema.json for Pixel
+[group('config')]
+events-schema:
+    pnpm exec tsx scripts/events-schema.ts
+
 # Validate infra/secrets.manifest.yaml (names only; no Azure login, no values)
 [group('config')]
 validate-secrets:

@@ -109,6 +109,21 @@ az storage entity query --account-name pixelphonedevst --auth-mode login -t Call
   --filter "PartitionKey eq '$(date -u +%Y-%m-%d)'" -o table
 ```
 
+## Pixel and the queue
+
+pixel-phone publishes call events to the `phone-events` queue; Pixel reads them. The contract is [docs/events.md](events.md). Messages expire after five minutes.
+
+Peek without taking them (needs the maintainer read role from `just tf-apply dev`):
+
+```sh
+az storage message peek --queue-name phone-events --account-name pixelphonedevst \
+  --auth-mode login --num-messages 32 -o json | jq -r '.[].content'
+```
+
+A publish has three seconds. A failure is logged as `queue.failed` and sent to Sentry (`area: queue`); Home Assistant still rings. If both fail, the call rings out and OpenR moves on.
+
+Changing the contract: edit `src/core/events.ts`, `just events-schema`, update `docs/events.md`, and tell Pixel's maintainers. A breaking change is a new `version`.
+
 ## Home Assistant
 
 Home Assistant owns the siren ([ADR 0005](adr/0005-home-assistant-owns-the-siren.md)). pixel-phone only turns a helper on while a call rings and off when it stops ringing; Home Assistant's own automations decide whether the siren sounds, and may turn the helper off themselves.

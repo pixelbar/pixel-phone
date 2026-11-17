@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!infra", "!**/*.sh"]
+		"includes": ["**", "!infra", "!**/*.sh", "!docs/events.schema.json"]
 	},
 	"formatter": {
 		"enabled": true,

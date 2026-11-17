@@ -172,6 +172,9 @@ importers:
       '@azure/identity':
         specifier: ^4.14.1
         version: 4.14.1(supports-color@8.1.1)
+      '@azure/storage-queue':
+        specifier: ^12.32.0
+        version: 12.32.0(supports-color@8.1.1)
       '@sentry/node':
         specifier: ^11.11.0
         version: 11.11.0
@@ -212,6 +215,10 @@ importers:
 
 packages:
 
+  '@azure-rest/core-client@2.9.0':
+    resolution: {integrity: sha512-6933vNLqh06RR7rumnrq3UZIeBtRLeBHDPMrieDPIljiCaMMwt0nRw++nd3TOxiohtasNtm29rC+b/9ZVKCOqg==}
+    engines: {node: '>=22.0.0'}
+
   '@azure/abort-controller@2.2.0':
     resolution: {integrity: sha512-fNAjWnA/nZ2jz31kxR/AqRaUT8ewHBw/WuBIosK0moMy1C9e5ValbDfFdIxJzVOOYaYkV/b2F1S4H/aHiqfVQg==}
     engines: {node: '>=22.0.0'}
@@ -223,6 +230,13 @@ packages:
   '@azure/core-client@1.11.2':
     resolution: {integrity: sha512-ajuIU1aMoTs/ERYrKnIqQrV5Vz3RL8mwDC5RdedIXUvR7pi6cWzeYmt0LfNz6+W91CuCO4WJG0zA6+PhU1X+hw==}
     engines: {node: '>=22.0.0'}
+
+  '@azure/core-http-compat@2.5.0':
+    resolution: {integrity: sha512-BoSmXPx2er1Ai+wKlDvj29jIQespCNBwEmKyZVHO2kEFsWbGjAjwMCGzug3DJM5/QYIV3vej0S1zcU5bq9fa8w==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@azure/core-client': ^1.10.0
+      '@azure/core-rest-pipeline': ^1.22.0
 
   '@azure/core-paging@1.7.0':
     resolution: {integrity: sha512-7GEAoIsaoBr6KELNRb8nypowCqvk8dnCHFCYg4XD4lOQGY2GqjQg5IhkRjyBFRO18CGSMq05PaNqSOE9GQro3g==}
@@ -271,6 +285,14 @@ packages:
   '@azure/msal-node@7.2.2':
     resolution: {integrity: sha512-MjsAHC+KUSXYYC8P57lVXy5IgSeO+PraXzLLHZI6hcX7nx/hCokY6gTPm2JcKLI3W88mu7ozjObBVGKExZUhww==}
     engines: {node: '>=20'}
+
+  '@azure/storage-common@12.5.0':
+    resolution: {integrity: sha512-bttzuhQiCIwrkzjPDA+AtAR7dg19L/CC6ztcqJ5LfvWpXuys9mHp0UQ0udYnoUvv9SCT9KTR5kqFvFr0e6k0lQ==}
+    engines: {node: '>=22.0.0'}
+
+  '@azure/storage-queue@12.32.0':
+    resolution: {integrity: sha512-jMtVg87egqEanN4lb5mXViAYAsjZshLhqgx35f1Xr+qjVF7eh9eI0u2dMuDW/IQXrNK6H9rXUbS3xap2XeI88g==}
+    engines: {node: '>=22.0.0'}
 
   '@babel/helper-string-parser@7.29.13':
     resolution: {integrity: sha512-fWegr+WsEsiMVW4KUNdIIzzMTZSzNiqhy0//6+2MRi2d5NFNsL/AYwBQW8eBnRbTBVRnDVzjaJEUqKaCWjMMdQ==}
@@ -1223,6 +1245,10 @@ packages:
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
 
+  events@3.3.0:
+    resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
+    engines: {node: '>=0.8.x'}
+
   expect-type@1.4.0:
     resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
     engines: {node: '>=12.0.0'}
@@ -1770,6 +1796,18 @@ packages:
 
 snapshots:
 
+  '@azure-rest/core-client@2.9.0(supports-color@8.1.1)':
+    dependencies:
+      '@azure/abort-controller': 2.2.0
+      '@azure/core-auth': 1.11.0(supports-color@8.1.1)
+      '@azure/core-rest-pipeline': 1.25.1(supports-color@8.1.1)
+      '@azure/core-tracing': 1.4.0
+      '@typespec/ts-http-runtime': 0.3.10(supports-color@8.1.1)
+      tslib: 2.9.1
+    transitivePeerDependencies:
+      - kerberos
+      - supports-color
+
   '@azure/abort-controller@2.2.0':
     dependencies:
       tslib: 2.9.1
@@ -1795,6 +1833,12 @@ snapshots:
     transitivePeerDependencies:
       - kerberos
       - supports-color
+
+  '@azure/core-http-compat@2.5.0(@azure/core-client@1.11.2(supports-color@8.1.1))(@azure/core-rest-pipeline@1.25.1(supports-color@8.1.1))':
+    dependencies:
+      '@azure/abort-controller': 2.2.0
+      '@azure/core-client': 1.11.2(supports-color@8.1.1)
+      '@azure/core-rest-pipeline': 1.25.1(supports-color@8.1.1)
 
   '@azure/core-paging@1.7.0':
     dependencies:
@@ -1884,6 +1928,41 @@ snapshots:
     dependencies:
       '@azure/msal-common': 16.16.2
       jsonwebtoken: 9.0.3
+
+  '@azure/storage-common@12.5.0(@azure/core-client@1.11.2(supports-color@8.1.1))(supports-color@8.1.1)':
+    dependencies:
+      '@azure/abort-controller': 2.2.0
+      '@azure/core-auth': 1.11.0(supports-color@8.1.1)
+      '@azure/core-http-compat': 2.5.0(@azure/core-client@1.11.2(supports-color@8.1.1))(@azure/core-rest-pipeline@1.25.1(supports-color@8.1.1))
+      '@azure/core-rest-pipeline': 1.25.1(supports-color@8.1.1)
+      '@azure/core-tracing': 1.4.0
+      '@azure/core-util': 1.14.0(supports-color@8.1.1)
+      '@azure/logger': 1.4.0(supports-color@8.1.1)
+      events: 3.3.0
+      tslib: 2.9.1
+    transitivePeerDependencies:
+      - '@azure/core-client'
+      - kerberos
+      - supports-color
+
+  '@azure/storage-queue@12.32.0(supports-color@8.1.1)':
+    dependencies:
+      '@azure-rest/core-client': 2.9.0(supports-color@8.1.1)
+      '@azure/abort-controller': 2.2.0
+      '@azure/core-auth': 1.11.0(supports-color@8.1.1)
+      '@azure/core-client': 1.11.2(supports-color@8.1.1)
+      '@azure/core-http-compat': 2.5.0(@azure/core-client@1.11.2(supports-color@8.1.1))(@azure/core-rest-pipeline@1.25.1(supports-color@8.1.1))
+      '@azure/core-paging': 1.7.0
+      '@azure/core-rest-pipeline': 1.25.1(supports-color@8.1.1)
+      '@azure/core-tracing': 1.4.0
+      '@azure/core-util': 1.14.0(supports-color@8.1.1)
+      '@azure/logger': 1.4.0(supports-color@8.1.1)
+      '@azure/storage-common': 12.5.0(@azure/core-client@1.11.2(supports-color@8.1.1))(supports-color@8.1.1)
+      fast-xml-parser: 5.12.1
+      tslib: 2.9.1
+    transitivePeerDependencies:
+      - kerberos
+      - supports-color
 
   '@babel/helper-string-parser@7.29.13': {}
 
@@ -2550,6 +2629,8 @@ snapshots:
   estree-walker@3.0.3:
     dependencies:
       '@types/estree': 1.0.10
+
+  events@3.3.0: {}
 
   expect-type@1.4.0: {}
 

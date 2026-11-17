@@ -88,3 +88,23 @@ resource "azurerm_role_assignment" "maintainer_media" {
   principal_type       = "User"
   depends_on           = [azurerm_storage_container.media]
 }
+
+# The runbook's debugging commands: read calls and peek at call events. Read only.
+resource "azurerm_role_assignment" "maintainer_tables_reader" {
+  for_each = var.maintainer_principal_ids
+
+  scope                = local.storage_scope
+  role_definition_name = "Storage Table Data Reader"
+  principal_id         = each.value
+  principal_type       = "User"
+}
+
+resource "azurerm_role_assignment" "maintainer_queue_reader" {
+  for_each = var.maintainer_principal_ids
+
+  scope                = local.queue_scope
+  role_definition_name = "Storage Queue Data Reader"
+  principal_id         = each.value
+  principal_type       = "User"
+  depends_on           = [azurerm_storage_queue.events]
+}

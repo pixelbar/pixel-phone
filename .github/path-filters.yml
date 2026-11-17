@@ -30,6 +30,9 @@ check:
   - ".gitignore"
   - "Dockerfile"
   - ".env.example"
+  # Tests check these docs against the code.
+  - "docs/events.md"
+  - "docs/events.schema.json"
   # Fail closed: a workflow or filter change still runs just check.
   - ".github/workflows/**"
   - ".github/path-filters.yml"
