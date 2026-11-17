@@ -17,7 +17,7 @@ Deploys replace whatever dev runs. Say so in the team chat first.
 
 **Rollback:** `az containerapp update -g pixel-phone-dev -n pixel-phone-dev --image ghcr.io/pixelbar/pixel-phone:<previous sha>`.
 
-**Cold start:** dev scales to zero after about 5 minutes without requests. Measured on 2026-11-11 (image `1234c81`): the first request after scaling to zero took **24.9 s**, and a warm one 0.04 s. That is longer than the 15 s accept window, so a doorbell call arriving while dev is asleep would ring out before the siren started. Fixing it is #29.
+**Always warm:** each environment runs exactly one replica and never scales to zero (ADR 0003, amended by #29). A cold start measured 24.9 s on 2026-11-11, longer than the 15 s accept window. A deploy still replaces the replica, so a call during a roll can be missed: deploy outside opening hours.
 
 ## Secrets
 
@@ -41,6 +41,23 @@ To set or change one:
 `just secrets-pull dev` goes the other way, after showing what changes. `just validate-secrets` checks the manifest.
 
 ## Telnyx
+
+| | dev | prod |
+| --- | --- | --- |
+| Number | `+31103024128` (until prod has its own, #21) | not ordered yet |
+| Call Control application | `pixel-phone-dev` | `pixel-phone-prod` (#20) |
+| Webhook URL | `https://pixel-phone-dev.ashysky-f402cc54.westeurope.azurecontainerapps.io/webhooks/telnyx` | `https://phone.pixelbar.nl/webhooks/telnyx` |
+
+### Pointing a number at an environment
+
+Until `just telnyx-sync` (#8) does this, it's done in the Telnyx portal:
+
+1. **Voice → Programmable Voice → Call Control Applications → Add new App**, named `pixel-phone-dev`.
+2. **Webhook URL:** the environment's URL above, method POST, **API version 2**.
+3. Turn **first command timeout off**. pixel-phone sends no command until someone accepts (ADR 0002), and Telnyx must not drop a call that is waiting.
+4. Save, then **Numbers → My Numbers → the number → Connection or App:** choose `pixel-phone-dev`.
+5. **Keys & Credentials → Public Key:** copy the account's Ed25519 public key into `.env.dev` as `TELNYX_PUBLIC_KEY`. Webhook signatures are checked against it from #9 onwards.
+6. Call the number. The dev logs should show `telnyx.webhook_stub` with `eventType: call.initiated`. Until #10 nothing answers, so the call just rings.
 
 ## Home Assistant
 

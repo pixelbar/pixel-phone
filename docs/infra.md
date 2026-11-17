@@ -19,7 +19,7 @@ flowchart LR
     pixel[Pixel] -- accept API --> app
 
     subgraph rg["pixel-phone-ENV"]
-        app["Container App<br/>pixel-phone-ENV<br/>0 to 1 replicas, port 3000"]
+        app["Container App<br/>pixel-phone-ENV<br/>1 replica, always warm, port 3000"]
         kv["Key Vault<br/>pixel-phone-ENV-kv"]
         subgraph st["Storage account (Azure AD only)"]
             tables["Tables<br/>Calls, WebhookEvents"]

@@ -17,4 +17,8 @@ Until 1.0.0, releases stay on 0.x: `Added` bumps minor, `Fixed`/`Changed` (and t
 - `infra/secrets.manifest.yaml` lists every Key Vault secret (Telnyx key and public key, Home Assistant token, the accept API's keys, Sentry DSN). `just secrets-push <env>` and `just secrets-pull <env>` sync them with `.env.<env>`, showing which change but never a value, and `just restart <env>` makes the app read them again. Each secret's feature is off in Terraform until its secrets exist (#5).
 - The HTTP service: `GET /healthz`, `GET /version`, and a `POST /webhooks/telnyx` stub that logs each event's type and returns 200, so the webhook URL can be given to Telnyx. Config is validated at startup, logs are JSON with secrets redacted, and errors go to Sentry when `SENTRY_DSN` is set. Merges to `main` publish the image to GHCR, and **Deploy dev** (or `just deploy dev`) puts a branch on `pixel-phone-dev` (#6).
 
+### Changed
+
+- pixel-phone now keeps one replica running at all times instead of scaling to zero. Starting from zero took about 25 seconds, longer than the 15 seconds anyone has to answer the doorbell (#29).
+
 [Unreleased]: https://github.com/pixelbar/pixel-phone/commits/main

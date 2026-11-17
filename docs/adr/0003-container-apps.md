@@ -1,6 +1,6 @@
-# 0003. Azure Container Apps, scale to zero, public ingress, two environments
+# 0003. Azure Container Apps, one always-warm replica, public ingress, two environments
 
-* Status: accepted
+* Status: accepted (the replica count is amended by #29, below)
 * Date: 2026-11-11
 * Issue: #2
 
@@ -19,3 +19,12 @@ Telnyx needs a public HTTPS webhook URL, and applying for a number needs one to 
 
 - The accept window timer runs in the process. Container Apps only scales to zero after minutes without requests, so a replica outlives every call it handles.
 - dev never touches the real siren (ADR 0005).
+
+## Amendment: one always-warm replica (2026-11-17, #29)
+
+#6 measured the cold start on dev: **24.9 s** from zero replicas to the first response, against 0.04 s warm. That is longer than the 15 s accept window (ADR 0004), so a doorbell call that woke a sleeping replica would ring out before the siren started. Most calls arrive after an idle spell, so most would be missed.
+
+- **`min_replicas = 1`, `max_replicas = 1`, in both environments.** Like Pixel's, the replica count is fixed in the module, not a variable.
+- It costs one idle 0.25 vCPU / 0.5 GiB replica per environment, billed at Container Apps' idle rate, partly inside the monthly free grant: a few euros a month.
+- Rejected: a smaller image with a faster startup (probably still well over 5 s, paid on every call after an idle spell), and a scheduled ping to keep a replica warm (the same cost, with more moving parts).
+- Consequence: a deploy still replaces the replica, so there are a few seconds during a roll when a call can be missed. Deploy outside opening hours.

@@ -50,9 +50,10 @@ resource "azurerm_container_app" "this" {
   }
 
   template {
-    # Scale to zero between calls (ADR 0003). Never more than one replica: the
+    # Exactly one replica, always warm (ADR 0003, amended by #29): a cold start
+    # took 25 s, longer than the 15 s accept window. Never more than one: the
     # accept window timer runs in the process.
-    min_replicas                     = 0
+    min_replicas                     = 1
     max_replicas                     = 1
     termination_grace_period_seconds = 30
 
@@ -67,8 +68,8 @@ resource "azurerm_container_app" "this" {
       cpu    = 0.25
       memory = "0.5Gi"
 
-      # Process alive only: a slow dependency must never restart a replica
-      # that is waking from zero to take a call.
+      # Process alive only: a slow dependency must never restart the replica
+      # that has to take the next call.
       liveness_probe {
         transport               = "HTTP"
         port                    = local.port

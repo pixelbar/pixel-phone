@@ -48,8 +48,8 @@ export function buildApp({ config, logger, onApp }: AppDeps): FastifyInstance {
 		);
 	});
 
-	// Process alive only: a slow dependency must never restart a replica that is
-	// waking from zero to take a call (ADR 0003).
+	// Process alive only: a slow dependency must never restart the replica
+	// that has to take the next call (ADR 0003).
 	app.get("/healthz", async () => ({ status: "ok" }));
 
 	app.get("/version", async () => ({
