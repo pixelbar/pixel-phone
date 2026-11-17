@@ -147,6 +147,14 @@ secrets-pull env *args:
 secrets-push env *args:
     pnpm exec tsx scripts/secrets-sync.ts push {{env}} {{args}}
 
+# Make the env's Telnyx Call Control application and numbers match config/telnyx.<env>.yaml.
+# Shows a diff and asks first. --dry-run only shows; --check exits 1 on drift; --yes skips
+# the question; --from-vault reads TELNYX_API_KEY from Key Vault instead of .env.<env>.
+[group('config')]
+[doc("Make Telnyx match config/telnyx.<env>.yaml (--dry-run, --check, --yes, --from-vault)")]
+telnyx-sync env *args:
+    pnpm exec tsx scripts/telnyx-sync.ts {{env}} {{args}}
+
 # Restart that env's Container App so it reads its secrets again
 [group('config')]
 restart env:

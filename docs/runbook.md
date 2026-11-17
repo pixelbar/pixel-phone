@@ -45,19 +45,28 @@ To set or change one:
 | | dev | prod |
 | --- | --- | --- |
 | Number | `+31103024128` (until prod has its own, #21) | not ordered yet |
-| Call Control application | `pixel-phone-dev` | `pixel-phone-prod` (#20) |
+| Call Control application | `Pixel Phone` (made in the portal) | `pixel-phone-prod` (#20) |
 | Webhook URL | `https://pixel-phone-dev.ashysky-f402cc54.westeurope.azurecontainerapps.io/webhooks/telnyx` | `https://phone.pixelbar.nl/webhooks/telnyx` |
 
-### Pointing a number at an environment
+### `just telnyx-sync`: the application and numbers as code
 
-Until `just telnyx-sync` (#8) does this, it's done in the Telnyx portal:
+[`config/telnyx.<env>.yaml`](../config) says what the Telnyx side should be: the application's name, its numbers, and (for prod) the webhook host. `just telnyx-sync <env>` makes Telnyx match ([ADR 0007](adr/0007-telnyx-config-by-script.md)):
 
-1. **Voice → Programmable Voice → Call Control Applications → Add new App**, named `pixel-phone-dev`.
-2. **Webhook URL:** the environment's URL above, method POST, **API version 2**.
-3. Turn **first command timeout off**. pixel-phone sends no command until someone accepts (ADR 0002), and Telnyx must not drop a call that is waiting.
-4. Save, then **Numbers → My Numbers → the number → Connection or App:** choose `pixel-phone-dev`.
-5. **Keys & Credentials → Public Key:** copy the account's Ed25519 public key into `.env.dev` as `TELNYX_PUBLIC_KEY`. Webhook signatures are checked against it from #9 onwards.
-6. Call the number. The dev logs should show `telnyx.webhook_stub` with `eventType: call.initiated`. Until #10 nothing answers, so the call just rings.
+- the application's webhook URL is `https://<host>/webhooks/telnyx` (and a failover URL if `failover_host` is set), API version 2, **first command timeout off**, active, and an inbound channel limit of 2;
+- every listed number points at that application.
+
+It reads `TELNYX_API_KEY` from `.env.<env>` (or Key Vault with `--from-vault`) and the host from the Container App (`az containerapp show`) unless the file sets `host`. It prints what would change and asks first. It never prints the key.
+
+| Command | What it does |
+| --- | --- |
+| `just telnyx-sync dev --dry-run` | Shows what would change, writes nothing |
+| `just telnyx-sync dev` | Shows the change and asks before writing |
+| `just telnyx-sync dev --check` | Exits 1 if someone changed something in the portal (drift) |
+| `just telnyx-sync dev --yes` | Writes without asking (dev only; prod also needs `PIXEL_PHONE_SYNC_PROD=1`) |
+
+**Run it** after the environment's hostname changes (a new Container App, or `phone.pixelbar.nl` for prod), after adding or moving a number in `config/telnyx.<env>.yaml`, and whenever `--check` reports drift. Running it twice changes nothing the second time.
+
+**Public key:** webhook signatures are checked against the account's Ed25519 public key (**Keys & Credentials → Public Key** in the portal), stored as `telnyx-public-key`. The sync doesn't manage it; it changes only if Telnyx rotates it.
 
 ## Home Assistant
 
