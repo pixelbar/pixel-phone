@@ -9,7 +9,7 @@ import { openSync, readSync } from "node:fs";
 import { promisify } from "node:util";
 import { input } from "@inquirer/prompts";
 import { ENVS, parseTarget } from "./envs.ts";
-import { azListArgs, azUploadArgs, planUpload } from "./media-lib.ts";
+import { azListArgs, azUploadArgs, parseMediaArgs, planUpload } from "./media-lib.ts";
 
 const run = promisify(execFile);
 
@@ -20,11 +20,7 @@ function head(file: string): Buffer {
 	return buffer;
 }
 
-const args = process.argv.slice(2);
-const nameAt = args.indexOf("--name");
-const name = nameAt >= 0 ? args[nameAt + 1] : undefined;
-const positional = args.filter((_, i) => i !== nameAt && i !== nameAt + 1);
-const [command, env, file] = positional;
+const { command, env, file, name } = parseMediaArgs(process.argv.slice(2));
 try {
 	const target = parseTarget(env);
 	if (command === "list") {
