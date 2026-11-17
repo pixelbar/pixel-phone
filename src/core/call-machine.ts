@@ -15,6 +15,7 @@ import {
 	type EndedReason,
 	type MissedReason,
 	newCallId,
+	sameCall,
 } from "./calls.ts";
 import type { Clock } from "./clock.ts";
 import { AcceptTooLate, AlreadyAccepted, NoSuchCall, StoreConflict } from "./errors.ts";
@@ -89,7 +90,14 @@ export class CallMachine {
 				updatedAt: now,
 				acceptBy: new Date(now.getTime() + this.acceptWindowMs),
 			};
-			await this.store.create(call);
+			try {
+				await this.store.create(call);
+			} catch (error) {
+				// Our own insert, retried after its reply was lost, conflicts with itself.
+				const stored =
+					error instanceof StoreConflict ? await this.store.get(call.callId) : undefined;
+				if (!stored || !sameCall(stored.value, call)) throw error;
+			}
 			if (active) return emit({ type: "busy", call, activeCallId: active.callId });
 			this.startTimer(call.callId, this.acceptWindowMs);
 			return emit({ type: "ringing", call });
@@ -260,7 +268,11 @@ export class CallMachine {
 				await this.store.update(next, found.etag);
 				return next;
 			} catch (error) {
-				if (!(error instanceof StoreConflict) || attempt >= MAX_CONFLICT_RETRIES) throw error;
+				if (!(error instanceof StoreConflict)) throw error;
+				// The write may have landed and only its reply been lost: then the row is ours.
+				const now = await this.store.get(callId);
+				if (now && sameCall(now.value, next)) return next;
+				if (attempt >= MAX_CONFLICT_RETRIES) throw error;
 			}
 		}
 	}

@@ -21,9 +21,15 @@ export const INBOUND_CHANNEL_LIMIT = 2;
 const REQUEST_TIMEOUT_MS = 15_000;
 
 const e164 = z.string().regex(/^\+[1-9]\d{6,14}$/, { error: "must be an E.164 number like +31…" });
+const HOSTNAME = /^[a-z0-9.-]+\.[a-z]{2,}$/i;
 const hostname = z
 	.string()
-	.regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, { error: "must be a bare hostname, no scheme or path" });
+	.regex(HOSTNAME, { error: "must be a bare hostname, no scheme or path" });
+
+/** A bare DNS name like pixel-phone-dev.….azurecontainerapps.io (not "None" or ""). */
+export function isHostname(value: string): boolean {
+	return HOSTNAME.test(value);
+}
 
 const fileSchema = z.strictObject({
 	/** Defaults to pixel-phone-<env>. */

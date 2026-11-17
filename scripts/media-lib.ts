@@ -79,3 +79,22 @@ export function azListArgs(target: Target) {
 		"table",
 	];
 }
+
+/** `push <env> <file> [--name x]` or `list <env>`; `--name` may come anywhere. */
+export function parseMediaArgs(argv: readonly string[]): {
+	command?: string;
+	env?: string;
+	file?: string;
+	name?: string;
+} {
+	const nameAt = argv.indexOf("--name");
+	const name = nameAt >= 0 ? argv[nameAt + 1] : undefined;
+	const [command, env, file] =
+		nameAt < 0 ? argv : argv.filter((_, i) => i !== nameAt && i !== nameAt + 1);
+	return {
+		...(command ? { command } : {}),
+		...(env ? { env } : {}),
+		...(file ? { file } : {}),
+		...(name ? { name } : {}),
+	};
+}
