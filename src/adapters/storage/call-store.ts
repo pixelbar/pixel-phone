@@ -137,6 +137,8 @@ export class TableCallStore implements CallStore {
 		const filter = odata`PartitionKey ge ${since} and callControlId eq ${callControlId}`;
 		for await (const entity of this.table.listEntities<CallEntity>({
 			queryOptions: { filter },
+			// A stalled listing would hold up every call change queued behind it.
+			...opts(),
 		})) {
 			return versioned(entity);
 		}
@@ -149,6 +151,8 @@ export class TableCallStore implements CallStore {
 		const out: Versioned<Call>[] = [];
 		for await (const entity of this.table.listEntities<CallEntity>({
 			queryOptions: { filter },
+			// A stalled listing would hold up every call change queued behind it.
+			...opts(),
 		})) {
 			out.push(versioned(entity));
 		}
@@ -176,6 +180,7 @@ export class TableCallStore implements CallStore {
 		let deleted = 0;
 		for await (const row of this.table.listEntities({
 			queryOptions: { filter, select: ["PartitionKey", "RowKey"] },
+			abortSignal: AbortSignal.timeout(60_000),
 		})) {
 			await this.table.deleteEntity(row.partitionKey as string, row.rowKey as string);
 			deleted++;
