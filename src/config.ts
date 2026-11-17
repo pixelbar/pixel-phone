@@ -4,6 +4,7 @@
  * all set or none. Errors name the setting, never its value.
  */
 import { z } from "zod";
+import { type ApiKey, parseApiKeys } from "./http/api-keys.ts";
 
 export const ENVIRONMENTS = ["local", "dev", "prod"] as const;
 export type Environment = (typeof ENVIRONMENTS)[number];
@@ -72,7 +73,8 @@ export type Config = {
 	gitSha?: string;
 	telnyx?: TelnyxConfig;
 	homeAssistant?: HomeAssistantConfig;
-	apiKeysYaml?: string;
+	/** The accept API's callers, from API_KEYS_YAML. */
+	apiKeys?: ApiKey[];
 	sentry?: SentryConfig;
 	azure: {
 		clientId?: string;
@@ -145,6 +147,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 			`HOME_ASSISTANT_RINGING_ENTITY must be a _dev helper outside prod (PIXEL_PHONE_ENV=${data.PIXEL_PHONE_ENV})`,
 		);
 	}
+	let apiKeys: ApiKey[] | undefined;
+	if (data.API_KEYS_YAML !== undefined) {
+		try {
+			apiKeys = parseApiKeys(data.API_KEYS_YAML);
+		} catch (error) {
+			problems.push((error as Error).message);
+		}
+	}
 	if (data.PIXEL_PHONE_ENV !== "local") {
 		if (data.AZURE_STORAGE_ACCOUNT_NAME === undefined) {
 			problems.push(`AZURE_STORAGE_ACCOUNT_NAME must be set in ${data.PIXEL_PHONE_ENV}`);
@@ -180,7 +190,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 					},
 				}
 			: {}),
-		...(data.API_KEYS_YAML ? { apiKeysYaml: data.API_KEYS_YAML } : {}),
+		...(apiKeys ? { apiKeys } : {}),
 		...(sentry ? { sentry } : {}),
 		azure: {
 			...(data.AZURE_CLIENT_ID ? { clientId: data.AZURE_CLIENT_ID } : {}),

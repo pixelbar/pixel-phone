@@ -24,6 +24,7 @@ Until 1.0.0, releases stay on 0.x: `Added` bumps minor, `Fixed`/`Changed` (and t
 - A Home Assistant ringer: turns the ringing helper on and off through HA's API, with a three-second limit and no retry. Without Home Assistant configured it only logs (#12).
 - Call events for Pixel, contract v1 (`docs/events.md`, JSON Schema from `just events-schema`): `ringing`, `accepted`, `missed`, `busy` and `ended`, sent as plain JSON to the `phone-events` queue with a five-minute TTL and a three-second limit (#13).
 - Maintainers can read the `Calls` table and peek at `phone-events` for debugging (#13).
+- The accept API for Home Assistant and Pixel: `POST /api/v1/calls/current/accept` and `POST /api/v1/calls/{callId}/accept`, with a bearer key per caller from `API_KEYS_YAML` (compared in constant time, never logged), ten requests a minute per key, and `202`/`404`/`409`/`410` answers. `just api-key <id>` makes a key. Described in `docs/openapi.yaml` (#14).
 
 ### Changed
 

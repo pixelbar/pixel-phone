@@ -109,6 +109,30 @@ az storage entity query --account-name pixelphonedevst --auth-mode login -t Call
   --filter "PartitionKey eq '$(date -u +%Y-%m-%d)'" -o table
 ```
 
+## The accept API
+
+`POST /api/v1/calls/current/accept` (Home Assistant's button) and `POST /api/v1/calls/{callId}/accept` (Pixel), with `Authorization: Bearer <key>`. Responses are in [docs/events.md](events.md#the-accept-api) and [docs/openapi.yaml](openapi.yaml).
+
+### Giving a caller a key
+
+1. `just api-key home-assistant` prints a line like `- { id: home-assistant, key: … }`. It writes nothing.
+2. Add the line to `API_KEYS_YAML` in `.env.dev`, keeping the other callers' lines. As one line: `API_KEYS_YAML='[{ id: home-assistant, key: … }, { id: pixel, key: … }]'`.
+3. `just secrets-push dev`. The first time, also set `accept_api_enabled = true` in `infra/envs/dev/terraform.example.tfvars` and `just tf-apply dev`; otherwise `just restart dev`.
+4. Give the key to the caller: Home Assistant's `secrets.yaml`, or Pixel's Key Vault. Never in chat or an issue.
+
+**Rotating:** make a new key for the same id, replace its line, push, restart, then update the caller. The old key stops working at the restart.
+
+**Logs:** `accept.accepted` (with `via`, `by`, `callId`), `accept.already_accepted`, `accept.too_late`, `accept.no_call`, `accept.unauthorized` (a bad key; at most 30 lines a minute per address), `accept.rate_limited`. Keys are never logged.
+
+### Trying it
+
+```sh
+curl -sS -X POST -H "Authorization: Bearer $KEY" \
+  https://pixel-phone-dev.ashysky-f402cc54.westeurope.azurecontainerapps.io/api/v1/calls/current/accept
+```
+
+With nothing ringing that answers `404 {"error":"no ringing call"}`, which proves the key works.
+
 ## Pixel and the queue
 
 pixel-phone publishes call events to the `phone-events` queue; Pixel reads them. The contract is [docs/events.md](events.md). Messages expire after five minutes.

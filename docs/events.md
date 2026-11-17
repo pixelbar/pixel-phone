@@ -48,6 +48,28 @@ The contract lives in [`src/core/events.ts`](../src/core/events.ts). `just event
 2. On **Answer**, call the accept API (below) with the `callId`.
 3. On `accepted`, `missed` or `ended`, update the post (who answered, or that nobody did) and remove the button.
 
-## Accepting
+## The accept API
 
-See [the accept API](#the-accept-api) (#14).
+Accepting makes pixel-phone answer the call and play the accept recording. The first accept wins, from either caller. [`openapi.yaml`](openapi.yaml) is the full description.
+
+```http
+POST /api/v1/calls/{callId}/accept      (Pixel, with the callId from `ringing`)
+POST /api/v1/calls/current/accept       (Home Assistant's button: whatever is ringing now)
+Authorization: Bearer <key>
+Content-Type: application/json
+
+{ "by": "discord:123456789012345678" }  (optional; recorded, not trusted)
+```
+
+| Status | Meaning | Body |
+| --- | --- | --- |
+| `202` | Accepted; pixel-phone is answering | `{ "callId" }` |
+| `400` | The body isn't `{ "by"?: string }` | `{ "error" }` |
+| `401` | Missing or wrong key | `{ "error" }` |
+| `404` | Nothing is ringing, or no such call | `{ "error" }` |
+| `409` | Someone accepted first | `{ "callId", "via", "by"? }` |
+| `410` | Too late: the window passed or the call is over | `{ "callId" }` |
+| `429` | More than 10 requests a minute with this key | `{ "error" }` |
+| `503` | The accept API isn't configured | `{ "error" }` |
+
+Each caller has its own key in `API_KEYS_YAML`. The key's `id` (`home-assistant`, `pixel`) is recorded as `via` and shows up in the `accepted` event. Pixel checks the `doorbell` capability before calling; pixel-phone trusts the key, not `by`.

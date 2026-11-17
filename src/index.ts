@@ -119,7 +119,7 @@ logger.info(
 		telnyx: config.telnyx !== undefined,
 		storage: storage?.kind ?? "memory",
 		homeAssistant: config.homeAssistant !== undefined,
-		acceptApi: config.apiKeysYaml !== undefined,
+		acceptApi: config.apiKeys?.map((k) => k.id) ?? false,
 		sentry: config.sentry !== undefined,
 	},
 	"pixel-phone is listening",

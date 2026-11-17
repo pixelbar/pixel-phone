@@ -143,6 +143,11 @@ tf-apply env *args:
     terraform -chdir=infra/envs/{{env}} init -backend-config=backend.azurerm.example.hcl -input=false >/dev/null
     terraform -chdir=infra/envs/{{env}} apply -input=false -var-file=terraform.example.tfvars {{args}}
 
+# Make a new accept API key for a caller (e.g. home-assistant, pixel) and print its API_KEYS_YAML line
+[group('config')]
+api-key id:
+    @pnpm exec tsx scripts/api-key.ts {{id}}
+
 # Write the call event contract (src/core/events.ts) to docs/events.schema.json for Pixel
 [group('config')]
 events-schema:

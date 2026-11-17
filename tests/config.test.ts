@@ -40,7 +40,7 @@ describe("loadConfig", () => {
 			TELNYX_API_KEY: FAKE_KEY,
 			TELNYX_PUBLIC_KEY: "fake-public-key",
 			...HA,
-			API_KEYS_YAML: "- { id: pixel, key: fake }",
+			API_KEYS_YAML: `- { id: pixel, key: ${"k".repeat(32)} }`,
 			SENTRY_DSN: "https://public@example.invalid/1",
 			AZURE_CLIENT_ID: "client",
 			AZURE_STORAGE_ACCOUNT_NAME: "pixelphonedevst",
@@ -53,7 +53,7 @@ describe("loadConfig", () => {
 			gitSha: "abc123",
 			telnyx: { apiKey: FAKE_KEY, publicKey: "fake-public-key" },
 			homeAssistant: { ringingEntity: "input_boolean.pixel_phone_ringing_dev" },
-			apiKeysYaml: "- { id: pixel, key: fake }",
+			apiKeys: [{ id: "pixel", key: "k".repeat(32) }],
 			sentry: { environment: "dev", release: "abc123", tracesSampleRate: 0.2 },
 			azure: { clientId: "client", storageAccount: "pixelphonedevst" },
 		});
@@ -89,6 +89,12 @@ describe("loadConfig", () => {
 			HOME_ASSISTANT_RINGING_ENTITY: HA.HOME_ASSISTANT_RINGING_ENTITY,
 		});
 		expect(config.homeAssistant).toBeUndefined();
+	});
+
+	it("refuses a bad API_KEYS_YAML without echoing it", () => {
+		const message = problem({ API_KEYS_YAML: "- { id: pixel, key: tooshort }" });
+		expect(message).toMatch(/at least 32/);
+		expect(message).not.toContain("tooshort");
 	});
 
 	it("needs a storage account outside local, and Azurite only locally", () => {
