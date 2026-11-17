@@ -84,6 +84,12 @@ Every request to `/webhooks/telnyx` must carry a valid Ed25519 signature (`telny
 
 Event IDs are kept in the `WebhookEvents` table for two days, then pruned.
 
+## Testing locally
+
+`just azurite`, then `just simulate-call [options]` (see the [README](../README.md#try-it-first)). It runs the real app with a fresh test key pair, a fake Telnyx and a fake Home Assistant, and Azurite for storage. Nothing leaves the laptop. `HARNESS_DEBUG=1` also prints the app's own log lines. CI runs six scenarios on every pull request.
+
+If a run says "no outcome" with no `call.ringing`, the app dropped the webhook: run with `HARNESS_DEBUG=1`. To start from empty storage, `just azurite-stop && just azurite`.
+
 ## Testing a real call on dev
 
 What has to be in place, once:

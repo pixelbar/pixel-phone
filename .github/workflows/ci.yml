@@ -50,7 +50,7 @@ jobs:
     needs: changes
     if: ${{ always() && !cancelled() && (needs.changes.result == 'failure' || needs.changes.outputs.check == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -77,6 +77,16 @@ jobs:
 
       - name: Build
         run: just build
+
+      # The whole app against Azurite and fakes (just simulate-call, #17).
+      - name: Simulate calls
+        run: |
+          just simulate-call --accept-after 2 --expect ended
+          just simulate-call --accept-after 2 --accept-via pixel --expect ended
+          just simulate-call --window 5 --expect missed
+          just simulate-call --hangup-after 2 --expect missed
+          just simulate-call --second-call --accept-after 3 --expect ended
+          just simulate-call --ha-down --queue-down --window 5 --expect missed
 
       - name: Upload coverage report
         if: ${{ !cancelled() }}

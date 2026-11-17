@@ -25,6 +25,11 @@ azurite:
 azurite-stop:
     docker compose down
 
+# Simulate a whole doorbell call locally with fakes (needs `just azurite`). `--help` lists options
+[group('develop')]
+simulate-call *args:
+    @node --import tsx scripts/simulate-call.ts {{args}}
+
 # Compile TypeScript to dist/
 [group('develop')]
 build:

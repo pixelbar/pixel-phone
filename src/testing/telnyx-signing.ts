@@ -2,7 +2,7 @@
  * Signs webhooks the way Telnyx does, with a key pair made for the test run. Used by the
  * webhook tests and the local harness (#17), so neither needs the real account key.
  */
-import { generateKeyPairSync, type KeyObject, sign } from "node:crypto";
+import { generateKeyPairSync, type KeyObject, randomUUID, sign } from "node:crypto";
 
 export type TestSigner = {
 	/** The public key as the Telnyx portal shows it: base64 of the raw 32 bytes. */
@@ -31,19 +31,17 @@ export function createTestSigner(): TestSigner {
 	};
 }
 
-let counter = 0;
-
 /** A Telnyx v2 webhook body, as Telnyx would send it. */
 export function telnyxWebhookBody(
 	eventType: string,
 	payload: Record<string, unknown>,
 	options: { id?: string; occurredAt?: Date } = {},
 ): string {
-	counter++;
 	return JSON.stringify({
 		data: {
 			record_type: "event",
-			id: options.id ?? `00000000-0000-4000-8000-${String(counter).padStart(12, "0")}`,
+			// Unique like Telnyx's: Azurite keeps WebhookEvents between runs.
+			id: options.id ?? randomUUID(),
 			event_type: eventType,
 			occurred_at: (options.occurredAt ?? new Date()).toISOString(),
 			payload,

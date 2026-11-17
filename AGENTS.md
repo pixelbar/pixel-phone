@@ -24,6 +24,8 @@ Always go through `just`:
 
 ```sh
 just dev              # run locally with hot reload
+just azurite          # local Azure Storage (Docker); storage tests and the harness need it
+just simulate-call    # a whole call against fakes; --help for the scenarios
 just check            # lint + typecheck + tests with coverage thresholds; must pass before you call a change done
 just test             # tests only
 just fmt              # auto-format (Biome, and Terraform if `terraform` is on PATH)

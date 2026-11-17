@@ -34,6 +34,10 @@ export type FakeTelnyxApi = {
 	commandReplies: CommandReply[];
 	/** Only requests with `Authorization: Bearer <apiKey>` are allowed; others get 401. */
 	apiKey: string;
+	/** Called after each successful call command (the harness answers it with a webhook). */
+	onCommand:
+		| ((callControlId: string, action: string, body: Record<string, unknown>) => void)
+		| undefined;
 	close(): Promise<void>;
 };
 
@@ -59,6 +63,7 @@ export async function startFakeTelnyxApi(apiKey = "KEYFAKE_test_only"): Promise<
 		numbers: [] as FakeNumber[],
 		requests: [] as RecordedRequest[],
 		commandReplies: [] as CommandReply[],
+		onCommand: undefined as FakeTelnyxApi["onCommand"],
 	};
 
 	const server: Server = createServer((req, res) => {
@@ -85,7 +90,13 @@ export async function startFakeTelnyxApi(apiKey = "KEYFAKE_test_only"): Promise<
 					return;
 				}
 				if (reply) return send(res, reply.status, reply.body ?? {});
-				return send(res, 200, { data: { result: "ok" } });
+				send(res, 200, { data: { result: "ok" } });
+				state.onCommand?.(
+					decodeURIComponent(parts[2] ?? ""),
+					parts[4] ?? "",
+					(body ?? {}) as Record<string, unknown>,
+				);
+				return;
 			}
 
 			if (parts[1] === "call_control_applications") {
@@ -156,6 +167,12 @@ export async function startFakeTelnyxApi(apiKey = "KEYFAKE_test_only"): Promise<
 		},
 		set commandReplies(value) {
 			state.commandReplies = value;
+		},
+		get onCommand() {
+			return state.onCommand;
+		},
+		set onCommand(value) {
+			state.onCommand = value;
 		},
 		apiKey,
 		close: () =>
