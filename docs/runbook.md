@@ -111,4 +111,31 @@ az storage entity query --account-name pixelphonedevst --auth-mode login -t Call
 
 ## Home Assistant
 
+Home Assistant owns the siren ([ADR 0005](adr/0005-home-assistant-owns-the-siren.md)). pixel-phone only turns a helper on while a call rings and off when it stops ringing; Home Assistant's own automations decide whether the siren sounds, and may turn the helper off themselves.
+
+| | dev | prod |
+| --- | --- | --- |
+| Helper | `input_boolean.pixel_phone_ringing_dev` (nothing is attached to it) | `input_boolean.pixel_phone_ringing` |
+| URL | the Nabu Casa URL, `home_assistant_url` in `infra/envs/<env>/terraform.example.tfvars` | same |
+
+Config refuses a non-`_dev` helper outside prod, and Terraform pins dev's helper.
+
+### Connecting an environment
+
+1. In Home Assistant, **Settings → Devices & services → Helpers → Create helper → Toggle**, named `pixel_phone_ringing_dev` (so its ID is `input_boolean.pixel_phone_ringing_dev`).
+2. **Settings → People → Users → Add user** `pixel-phone` (not an administrator). Log in as it once, then **Profile → Security → Long-lived access tokens → Create token**.
+3. Put the token in `.env.dev` as `HOME_ASSISTANT_TOKEN`, then `just secrets-push dev`.
+4. Set `home_assistant_url` in `infra/envs/dev/terraform.example.tfvars` and `just tf-apply dev`.
+5. Check: `curl -sS -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"entity_id":"input_boolean.pixel_phone_ringing_dev"}' https://<nabu casa url>/api/services/input_boolean/turn_on` flips the helper on. Turn it off the same way.
+
+Each call has three seconds and no retry. A failure is logged as `home-assistant.failed` and sent to Sentry with the tag `area: home-assistant`; the call still reaches Pixel through the queue.
+
+Without `home_assistant_url`, pixel-phone logs `ringer.off` instead of ringing.
+
+| `home-assistant.failed` says | Fix |
+| --- | --- |
+| `401 (is HOME_ASSISTANT_TOKEN valid?)` | The token was revoked or mistyped: make a new one (step 2), push, restart |
+| `400` / `404 (does input_boolean… exist…)` | The helper is missing or renamed (step 1) |
+| `didn't get through (TimeoutError)` | Home Assistant or Nabu Casa is down or slow |
+
 ## When the doorbell doesn't ring
