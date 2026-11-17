@@ -20,6 +20,7 @@ import {
 	applyPlan,
 	formatPlan,
 	hasChanges,
+	isHostname,
 	loadTelnyxEnvFile,
 	makePlan,
 	planProblems,
@@ -67,7 +68,8 @@ async function containerAppHost(target: Target): Promise<string> {
 			"tsv",
 		]);
 		const host = stdout.trim();
-		if (host === "") throw new Error("no ingress hostname");
+		// az prints "None" in TSV for a missing value; only a real hostname will do.
+		if (!isHostname(host)) throw new Error("no ingress hostname");
 		return host;
 	} catch {
 		throw new Error(
