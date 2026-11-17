@@ -6,10 +6,19 @@ export class MemoryCallStore implements CallStore {
 	private readonly rows = new Map<string, { call: Call; version: number }>();
 	/** Called before each update, so a test can change the row underneath (a race). */
 	beforeUpdate: ((call: Call) => void) | undefined;
+	/** Writes land, but the next create/update reply is "lost": it throws StoreConflict. */
+	loseNextReply = false;
+
+	private lost(callId: string) {
+		if (!this.loseNextReply) return;
+		this.loseNextReply = false;
+		throw new StoreConflict(`call ${callId}: reply lost, retry conflicted`);
+	}
 
 	async create(call: Call): Promise<string> {
 		if (this.rows.has(call.callId)) throw new StoreConflict(`call ${call.callId} exists`);
 		this.rows.set(call.callId, { call: structuredClone(call), version: 1 });
+		this.lost(call.callId);
 		return "1";
 	}
 
@@ -40,6 +49,7 @@ export class MemoryCallStore implements CallStore {
 			throw new StoreConflict(`call ${call.callId} changed`);
 		row.call = structuredClone(call);
 		row.version++;
+		this.lost(call.callId);
 		return String(row.version);
 	}
 

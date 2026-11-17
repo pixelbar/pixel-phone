@@ -378,6 +378,31 @@ describe("edge cases", () => {
 		expect((await s.machine.recover()).map((t) => t.type)).toEqual(["ended"]);
 	});
 
+	it("recognises its own write when the reply was lost and the retry conflicted", async () => {
+		const s = setup();
+		s.store.loseNextReply = true;
+		const call = await ringing(s);
+		s.store.loseNextReply = true;
+		const accepted = await s.machine.accept(call.callId, HA);
+		expect(accepted.status).toBe("accepting");
+		await flush();
+		expect(s.types()).toEqual(["ringing", "accepted"]);
+	});
+
+	it("still fails when a conflicting create holds someone else's row", async () => {
+		const s = setup();
+		const call = await ringing(s);
+		const other = new CallMachine({ store: s.store, clock: s.clock });
+		machines.push(other);
+		// Same call ID by force: a create that collides with a different row.
+		const collide = s.store.create.bind(s.store);
+		s.store.create = (c) => collide({ ...c, callId: call.callId });
+		s.store.get = async () => ({ value: { ...call, from: "+1999" }, etag: "1" });
+		await expect(other.incoming({ callControlId: "v3:other" })).rejects.toBeInstanceOf(
+			StoreConflict,
+		);
+	});
+
 	it("swallows listener errors when no onError is given", async () => {
 		const machine = new CallMachine({
 			store: new MemoryCallStore(),
