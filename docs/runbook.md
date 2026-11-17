@@ -84,6 +84,31 @@ Every request to `/webhooks/telnyx` must carry a valid Ed25519 signature (`telny
 
 Event IDs are kept in the `WebhookEvents` table for two days, then pruned.
 
+## Calls
+
+Each call is a row in the `Calls` table: partition = the UTC day, row = the call ID (`20261118-3f9a1c2b7d4e`). Rows are kept 90 days. The states are in the [README](../README.md#call-states).
+
+| Status | Meaning |
+| --- | --- |
+| `ringing` | Waiting for an accept. No command has been sent to Telnyx |
+| `accepting` | Someone accepted: answered, playing the recording |
+| `ended` | `endedReason`: `playback_finished` (normal), `caller_hung_up` (during the recording), `abandoned` (no Telnyx event for 3 minutes after the accept) |
+| `missed` | `missedReason`: `timeout` (nobody accepted within `ACCEPT_WINDOW_SECONDS`) or `caller_hung_up`. Never answered, so OpenR moved on |
+| `busy` | Arrived while another call was active. Never answered: it rings out and OpenR moves on |
+
+**One call at a time.** A second doorbell call while one is `ringing` or `accepting` is `busy` and gets no command, so OpenR moves on to its next number. We don't send a SIP busy: OpenR only moves on after *no answer*, and a busy might not count (decided for #11).
+
+**Stuck calls can't block the doorbell.** A `ringing` call past its window, or an `accepting` call with no event for 3 minutes, is retired when the next call arrives and on startup.
+
+**OpenR's ring time per number** bounds how long anyone has to accept: if it is shorter than `ACCEPT_WINDOW_SECONDS` (15 s), OpenR gives up first. **Not measured yet.** To measure: call the dev number from OpenR (press the doorbell with only the dev number on its list), don't accept, and read the gap between `call.initiated` and `call.hangup` in the logs. Record it here.
+
+### Looking at calls
+
+```sh
+az storage entity query --account-name pixelphonedevst --auth-mode login -t Calls \
+  --filter "PartitionKey eq '$(date -u +%Y-%m-%d)'" -o table
+```
+
 ## Home Assistant
 
 ## When the doorbell doesn't ring

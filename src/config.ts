@@ -20,6 +20,9 @@ const schema = z.object({
 	PIXEL_PHONE_VERSION: text.default("dev"),
 	PIXEL_PHONE_GIT_SHA: text.optional(),
 
+	// How long after a call arrives someone may still accept it (ADR 0004).
+	ACCEPT_WINDOW_SECONDS: z.coerce.number().int().min(5).max(120).default(15),
+
 	// Telnyx Call Control (secrets: telnyx-api-key, telnyx-public-key)
 	TELNYX_API_KEY: text.optional(),
 	TELNYX_PUBLIC_KEY: text.optional(),
@@ -65,6 +68,7 @@ export type Config = {
 	port: number;
 	logLevel: LogLevel;
 	version: string;
+	acceptWindowSeconds: number;
 	gitSha?: string;
 	telnyx?: TelnyxConfig;
 	homeAssistant?: HomeAssistantConfig;
@@ -159,6 +163,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		port: data.PORT,
 		logLevel: data.LOG_LEVEL,
 		version: data.PIXEL_PHONE_VERSION,
+		acceptWindowSeconds: data.ACCEPT_WINDOW_SECONDS,
 		...(data.PIXEL_PHONE_GIT_SHA ? { gitSha: data.PIXEL_PHONE_GIT_SHA } : {}),
 		...(telnyx && data.TELNYX_API_KEY && data.TELNYX_PUBLIC_KEY
 			? { telnyx: { apiKey: data.TELNYX_API_KEY, publicKey: data.TELNYX_PUBLIC_KEY } }

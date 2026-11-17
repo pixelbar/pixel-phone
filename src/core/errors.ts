@@ -17,3 +17,32 @@ export class TelephonyMisuse extends PixelPhoneError {
 export class TelephonyFailed extends PixelPhoneError {
 	override name = "TelephonyFailed";
 }
+
+/** There's no call to accept: none is ringing, or that call ID doesn't exist. */
+export class NoSuchCall extends PixelPhoneError {
+	override name = "NoSuchCall";
+}
+
+/** Someone else accepted first. Says who. */
+export class AlreadyAccepted extends PixelPhoneError {
+	override name = "AlreadyAccepted";
+	constructor(
+		readonly callId: string,
+		readonly winner: { via: string; by?: string } | undefined,
+	) {
+		super(`call ${callId} was already accepted`);
+	}
+}
+
+/** The accept window has passed, or the call is over. */
+export class AcceptTooLate extends PixelPhoneError {
+	override name = "AcceptTooLate";
+	constructor(readonly callId: string) {
+		super(`call ${callId} can no longer be accepted`);
+	}
+}
+
+/** A conditional write lost: the row changed since it was read. */
+export class StoreConflict extends PixelPhoneError {
+	override name = "StoreConflict";
+}

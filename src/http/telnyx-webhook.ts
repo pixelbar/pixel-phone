@@ -11,7 +11,8 @@ import {
 	TIMESTAMP_HEADER,
 	verifyTelnyxSignature,
 } from "../adapters/telnyx/webhook.ts";
-import type { Clock, SeenEvents, TelephonyEventHandler } from "../core/telephony-events.ts";
+import type { Clock } from "../core/clock.ts";
+import type { SeenEvents, TelephonyEventHandler } from "../core/telephony-events.ts";
 import type { Report } from "../observability/report.ts";
 
 export type TelnyxWebhookDeps = {

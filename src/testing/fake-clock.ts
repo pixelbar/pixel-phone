@@ -1,5 +1,5 @@
 /** A Clock whose time only moves when a test says so. Timers fire as time passes them. */
-import type { Clock } from "../core/telephony-events.ts";
+import type { Clock } from "../core/clock.ts";
 
 type Timer = { at: number; fn: () => void; id: number };
 

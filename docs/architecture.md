@@ -79,6 +79,7 @@ Every setting is read in `src/config.ts`. This table grows as features land.
 | `PORT` | no (`3000`) | HTTP port |
 | `LOG_LEVEL` | no (`info`) | pino level |
 | `PIXEL_PHONE_VERSION`, `PIXEL_PHONE_GIT_SHA` | no | Baked into the image; `/version` reports them |
+| `ACCEPT_WINDOW_SECONDS` | no (`15`) | How long after a call arrives it can still be accepted (5–120) |
 | `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY` | together | Telnyx Call Control. Without them the webhook answers 503 |
 | `HOME_ASSISTANT_URL`, `HOME_ASSISTANT_TOKEN`, `HOME_ASSISTANT_RINGING_ENTITY` | together | Home Assistant. Outside prod the entity must end in `_dev` |
 | `API_KEYS_YAML` | no | The accept API's callers |

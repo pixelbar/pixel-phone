@@ -25,6 +25,7 @@ describe("loadConfig", () => {
 			port: 3000,
 			logLevel: "info",
 			version: "dev",
+			acceptWindowSeconds: 15,
 			azure: { eventsQueue: "phone-events", mediaContainer: "media" },
 		});
 	});

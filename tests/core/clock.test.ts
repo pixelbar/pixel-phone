@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { systemClock } from "../../src/core/telephony-events.ts";
+import { systemClock } from "../../src/core/clock.ts";
 
 describe("systemClock", () => {
 	it("tells the time and runs timers, which can be cancelled", async () => {
