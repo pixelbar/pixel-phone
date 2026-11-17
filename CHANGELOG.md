@@ -19,6 +19,7 @@ Until 1.0.0, releases stay on 0.x: `Added` bumps minor, `Fixed`/`Changed` (and t
 - `just telnyx-sync <env>` makes the Telnyx Call Control application and the environment's numbers match `config/telnyx.<env>.yaml`: webhook URL, API version 2, first command timeout off, two inbound lines. It shows a diff and asks first; `--check` fails on drift made in the portal (#8).
 - Telnyx webhooks are verified (Ed25519 signature over the raw body, five-minute replay window) and de-duplicated by event ID in the `WebhookEvents` table. Bad signatures get 401 and a warning; verified call events are acknowledged at once and handed to the call flow (#9).
 - `just azurite` runs local Azure Storage in Docker for tests and `just dev`; CI starts it too (#9).
+- A Telnyx Call Control client behind a `Telephony` port: answer, play and hang up, each with a `command_id`, a five-second limit and one retry on a network error only. A call that has already ended comes back as `CallGone` (#10).
 
 ### Changed
 
