@@ -31,8 +31,9 @@ export function buildApp({
 		bodyLimit: BODY_LIMIT,
 		// Fastify's own per-request lines are off; the onResponse hook below writes one line.
 		logController: new LogController({ disableRequestLogging: true }),
-		// Container Apps' ingress sets X-Forwarded-For.
-		trustProxy: true,
+		// Container Apps' ingress appends the client's address to X-Forwarded-For. Trust that
+		// one hop only: anything further left was written by the client and can be spoofed.
+		trustProxy: (_address: string, hop: number) => hop < 1,
 	});
 	onApp?.(app);
 

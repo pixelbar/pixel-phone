@@ -59,6 +59,17 @@ describe("the HTTP app", () => {
 		expect(res.statusCode).toBe(503);
 	});
 
+	it("takes the client address from the ingress's hop only, not a spoofed one", async () => {
+		const { instance } = app();
+		instance.get("/ip", async (request) => ({ ip: request.ip }));
+		const res = await instance.inject({
+			url: "/ip",
+			headers: { "x-forwarded-for": "6.6.6.6, 203.0.113.7" },
+			remoteAddress: "10.0.0.1",
+		});
+		expect(res.json()).toEqual({ ip: "203.0.113.7" });
+	});
+
 	it("refuses oversized bodies and unknown routes", async () => {
 		const { instance, lines } = app();
 		const big = await instance.inject({
