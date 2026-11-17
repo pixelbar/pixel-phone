@@ -34,6 +34,7 @@ check:
   - "docs/events.md"
   - "docs/events.schema.json"
   - "docs/openapi.yaml"
+  - "media/**"
   # Fail closed: a workflow or filter change still runs just check.
   - ".github/workflows/**"
   - ".github/path-filters.yml"

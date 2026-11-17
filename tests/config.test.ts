@@ -26,6 +26,7 @@ describe("loadConfig", () => {
 			logLevel: "info",
 			version: "dev",
 			acceptWindowSeconds: 15,
+			recordingAccepted: "accepted.mp3",
 			azure: { eventsQueue: "phone-events", mediaContainer: "media" },
 		});
 	});

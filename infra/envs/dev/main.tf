@@ -9,6 +9,7 @@ module "pixel_phone" {
   pixel_principal_id       = var.pixel_principal_id
   maintainer_principal_ids = var.maintainer_principal_ids
   purge_protection_enabled = false
+  recording_accepted       = var.recording_accepted
 
   # Features: turn each on only after `just secrets-push dev` (infra/secrets.manifest.yaml).
   telnyx_enabled                = var.telnyx_enabled

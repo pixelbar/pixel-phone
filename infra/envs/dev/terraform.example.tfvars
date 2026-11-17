@@ -9,6 +9,10 @@ accept_api_enabled = false
 sentry_enabled     = true # sentry-dsn pushed 2026-11-11
 # home_assistant_url = "https://<instance>.ui.nabu.casa"
 
+# The committed test recording until a real one exists:
+#   just media push dev media/placeholder-accepted.wav --name accepted.wav
+recording_accepted = "accepted.wav"
+
 # Who may run just secrets-push and just media push against dev. Find an object ID
 # with: az ad user show --id <upn> --query id -o tsv
 maintainer_principal_ids = {

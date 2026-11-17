@@ -88,3 +88,4 @@ Every setting is read in `src/config.ts`. This table grows as features land.
 | `AZURE_STORAGE_ACCOUNT_NAME` | in dev and prod | Storage for calls, webhook IDs, the queue and recordings |
 | `AZURE_STORAGE_CONNECTION_STRING` | local only | `UseDevelopmentStorage=true` for Azurite (`just azurite`). Unset locally: state is kept in memory |
 | `PHONE_EVENTS_QUEUE`, `MEDIA_CONTAINER` | no | Queue and blob container names |
+| `RECORDING_ACCEPTED` | no (`accepted.mp3`) | The accept recording's blob name in the media container (`.mp3` or `.wav`) |

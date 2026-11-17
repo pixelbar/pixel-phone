@@ -51,6 +51,11 @@ const schema = z.object({
 	AZURE_STORAGE_CONNECTION_STRING: text.optional(),
 	PHONE_EVENTS_QUEUE: text.default("phone-events"),
 	MEDIA_CONTAINER: text.default("media"),
+	// The accept recording's blob in MEDIA_CONTAINER (ADR 0008). MP3 or WAV.
+	RECORDING_ACCEPTED: z
+		.string()
+		.regex(/^[\w.-]+\.(mp3|wav)$/, { error: "must be a .mp3 or .wav blob name" })
+		.default("accepted.mp3"),
 });
 
 type Env = z.infer<typeof schema>;
@@ -70,6 +75,7 @@ export type Config = {
 	logLevel: LogLevel;
 	version: string;
 	acceptWindowSeconds: number;
+	recordingAccepted: string;
 	gitSha?: string;
 	telnyx?: TelnyxConfig;
 	homeAssistant?: HomeAssistantConfig;
@@ -174,6 +180,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		logLevel: data.LOG_LEVEL,
 		version: data.PIXEL_PHONE_VERSION,
 		acceptWindowSeconds: data.ACCEPT_WINDOW_SECONDS,
+		recordingAccepted: data.RECORDING_ACCEPTED,
 		...(data.PIXEL_PHONE_GIT_SHA ? { gitSha: data.PIXEL_PHONE_GIT_SHA } : {}),
 		...(telnyx && data.TELNYX_API_KEY && data.TELNYX_PUBLIC_KEY
 			? { telnyx: { apiKey: data.TELNYX_API_KEY, publicKey: data.TELNYX_PUBLIC_KEY } }

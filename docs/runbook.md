@@ -109,6 +109,32 @@ az storage entity query --account-name pixelphonedevst --auth-mode login -t Call
   --filter "PartitionKey eq '$(date -u +%Y-%m-%d)'" -o table
 ```
 
+## Recordings
+
+The only recording is the accept recording ("someone is on their way to let you in"), played after someone accepts ([ADR 0008](adr/0008-recordings-in-blob-storage.md)). It lives in the environment's private `media` container; `RECORDING_ACCEPTED` names the blob (`recording_accepted` in Terraform, default `accepted.mp3`). For each accepted call the app signs a read-only URL that lasts 15 minutes and hands it to Telnyx. Nothing is public.
+
+| Command | What it does |
+| --- | --- |
+| `just media push dev <file> --name accepted.mp3` | Uploads (or replaces) a recording, after checking it's MP3 or WAV and the name's extension matches. Prod asks first |
+| `just media list dev` | Lists the recordings |
+
+Changing a recording needs **no deploy**: the next accepted call plays the new file. Changing its *name* is a Terraform change (`recording_accepted`) and `just tf-apply`.
+
+**dev** plays the committed test recording, [`media/placeholder-accepted.wav`](../media/placeholder-accepted.wav) (a synthetic voice saying it's a test):
+
+```sh
+just media push dev media/placeholder-accepted.wav --name accepted.wav
+```
+
+**At startup** the app checks the recording exists. If not, it logs `media.failed` ("accept recording … is missing") and reports it to Sentry, and still starts: a call can still be accepted, but the caller hears silence before we hang up.
+
+Checking a URL by hand (needs the maintainer role, which can also sign):
+
+```sh
+az storage blob generate-sas --account-name pixelphonedevst --container-name media --name accepted.wav \
+  --permissions r --expiry $(date -u -v+15M +%Y-%m-%dT%H:%MZ) --auth-mode login --as-user --full-uri -o tsv
+```
+
 ## The accept API
 
 `POST /api/v1/calls/current/accept` (Home Assistant's button) and `POST /api/v1/calls/{callId}/accept` (Pixel), with `Authorization: Bearer <key>`. Responses are in [docs/events.md](events.md#the-accept-api) and [docs/openapi.yaml](openapi.yaml).
