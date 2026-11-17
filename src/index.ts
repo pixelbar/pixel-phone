@@ -9,7 +9,9 @@ import { TableSeenEvents, WEBHOOK_EVENTS_TABLE } from "./adapters/storage/seen-e
 import { telnyxPublicKey } from "./adapters/telnyx/webhook.ts";
 import { ConfigError, loadConfig } from "./config.ts";
 import { systemClock } from "./core/clock.ts";
+import { NoSuchCall } from "./core/errors.ts";
 import type { TelephonyEventHandler } from "./core/telephony-events.ts";
+import { ApiKeys } from "./http/api-keys.ts";
 import { buildApp } from "./http/app.ts";
 import { createLogger } from "./observability/logger.ts";
 import { createReporter } from "./observability/report.ts";
@@ -74,6 +76,12 @@ const app = buildApp({
 		handler,
 		clock,
 		report,
+	},
+	// Until the call flow is wired in (#16) nothing rings, so every accept is a 404; the
+	// key check already works, so a caller's key can be tried.
+	accept: {
+		keys: config.apiKeys ? new ApiKeys(config.apiKeys) : undefined,
+		accept: () => Promise.reject(new NoSuchCall("the call flow isn't wired yet")),
 	},
 	onApp: (instance) => {
 		if (config.sentry) Sentry.setupFastifyErrorHandler(instance);

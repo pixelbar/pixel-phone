@@ -59,4 +59,21 @@ export function newCallId(at: Date): string {
 
 export const CALL_ID_PATTERN = /^\d{8}-[0-9a-f]{12}$/;
 
+/**
+ * Whether two calls hold the same data. After a lost reply, a retried write can fail as a
+ * conflict although the first attempt landed; reading the row back and finding exactly
+ * what we wrote tells us it was ours.
+ */
+export function sameCall(a: Call, b: Call): boolean {
+	return canonical(a) === canonical(b);
+}
+
+function canonical(call: Call): string {
+	const entries = Object.entries(call)
+		.filter(([, v]) => v !== undefined)
+		.map(([k, v]) => [k, v instanceof Date ? v.toISOString() : v] as const)
+		.sort(([a], [b]) => a.localeCompare(b));
+	return JSON.stringify(entries);
+}
+
 export const isActive = (call: Call) => call.status === "ringing" || call.status === "accepting";
