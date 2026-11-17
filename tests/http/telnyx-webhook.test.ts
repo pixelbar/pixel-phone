@@ -101,6 +101,23 @@ describe("POST /webhooks/telnyx", () => {
 		expect(lines.some((l) => l.event === "telnyx.webhook_duplicate")).toBe(true);
 	});
 
+	it("de-duplicates on the event's occurred_at day, not the arrival time", async () => {
+		const calls: [string, Date][] = [];
+		const { post } = setup({
+			seen: {
+				firstSeen: async (id, at) => {
+					calls.push([id, at]);
+					return true;
+				},
+			},
+		});
+		const occurredAt = new Date(Date.now() - 60_000);
+		await post(
+			telnyxWebhookBody("call.hangup", { call_control_id: "v3:x" }, { id: "evt-at", occurredAt }),
+		);
+		expect(calls).toEqual([["evt-at", occurredAt]]);
+	});
+
 	it("handles the event anyway when de-duplication storage fails, and reports it", async () => {
 		const { post, handled, report } = setup({
 			seen: { firstSeen: () => Promise.reject(new Error("table down")) },

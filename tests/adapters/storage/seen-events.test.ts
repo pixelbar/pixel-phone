@@ -19,6 +19,13 @@ describe.skipIf(!azuriteUp)("TableSeenEvents (Azurite)", () => {
 		expect(await seen.firstSeen("evt-2", at)).toBe(true);
 	});
 
+	it("catches a redelivery whose first try was on the previous day, keyed by occurredAt", async () => {
+		const occurredAt = new Date("2026-11-18T23:59:59Z");
+		expect(await seen.firstSeen("evt-midnight", occurredAt)).toBe(true);
+		// The retry arrives after midnight, but carries the same occurredAt.
+		expect(await seen.firstSeen("evt-midnight", occurredAt)).toBe(false);
+	});
+
 	it("is safe with characters a row key can't hold", async () => {
 		expect(await seen.firstSeen("a/b#c?d", new Date())).toBe(true);
 		expect(safeRowKey("a/b\\c#d?e\u0001")).toBe("a_b_c_d_e_");
