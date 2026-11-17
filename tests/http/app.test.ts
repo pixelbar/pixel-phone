@@ -50,35 +50,13 @@ describe("the HTTP app", () => {
 		expect((await app().instance.inject({ url: "/version" })).json()).not.toHaveProperty("sha");
 	});
 
-	it("acknowledges a Telnyx webhook and logs its type, without acting on it", async () => {
-		const { instance, lines } = app();
-		const res = await instance.inject({
+	it("answers 503 on the webhook when Telnyx isn't configured", async () => {
+		const res = await app().instance.inject({
 			method: "POST",
 			url: "/webhooks/telnyx",
-			payload: { data: { id: "evt-1", event_type: "call.initiated", payload: { from: "+31" } } },
+			payload: { data: {} },
 		});
-		expect(res.statusCode).toBe(200);
-		expect(res.json()).toEqual({ received: true });
-		const stub = lines.find((l) => l.event === "telnyx.webhook_stub");
-		expect(stub).toMatchObject({ eventType: "call.initiated", eventId: "evt-1", recognised: true });
-		expect(lines.find((l) => l.event === "http.request")).toMatchObject({
-			method: "POST",
-			path: "/webhooks/telnyx",
-			status: 200,
-		});
-	});
-
-	it("still acknowledges a webhook it doesn't recognise", async () => {
-		const { instance, lines } = app();
-		const res = await instance.inject({
-			method: "POST",
-			url: "/webhooks/telnyx",
-			payload: { nope: 1 },
-		});
-		expect(res.statusCode).toBe(200);
-		expect(lines.find((l) => l.event === "telnyx.webhook_stub")).toMatchObject({
-			recognised: false,
-		});
+		expect(res.statusCode).toBe(503);
 	});
 
 	it("refuses oversized bodies and unknown routes", async () => {

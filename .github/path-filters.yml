@@ -24,6 +24,7 @@ check:
   - "pnpm-lock.yaml"
   - "pnpm-workspace.yaml"
   - "justfile"
+  - "compose.yaml"
   - ".nvmrc"
   # Biome skips what git ignores.
   - ".gitignore"

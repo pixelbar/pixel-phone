@@ -14,6 +14,17 @@ install:
 dev:
     pnpm exec tsx watch --env-file-if-exists=.env --import ./src/instrument.ts src/index.ts
 
+# Start Azurite (local Azure Storage: tables, queues, blobs) in Docker, in the background
+[group('develop')]
+azurite:
+    docker compose up -d --wait azurite
+    @echo "Azurite is up. Use AZURE_STORAGE_CONNECTION_STRING=UseDevelopmentStorage=true"
+
+# Stop Azurite
+[group('develop')]
+azurite-stop:
+    docker compose down
+
 # Compile TypeScript to dist/
 [group('develop')]
 build:

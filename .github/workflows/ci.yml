@@ -68,6 +68,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Storage adapter tests run against Azurite; with CI set they fail if it's missing.
+      - name: Start Azurite
+        run: just azurite
+
       - name: Lint, typecheck, test with coverage thresholds
         run: just check
 

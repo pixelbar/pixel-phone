@@ -68,6 +68,22 @@ It reads `TELNYX_API_KEY` from `.env.<env>` (or Key Vault with `--from-vault`) a
 
 **Public key:** webhook signatures are checked against the account's Ed25519 public key (**Keys & Credentials → Public Key** in the portal), stored as `telnyx-public-key`. The sync doesn't manage it; it changes only if Telnyx rotates it.
 
+### Webhooks
+
+Every request to `/webhooks/telnyx` must carry a valid Ed25519 signature (`telnyx-signature-ed25519` over `telnyx-timestamp|body`) made within the last five minutes. What the logs say:
+
+| Log `event` | Meaning |
+| --- | --- |
+| `telnyx.webhook` | A verified event, handed to the call flow |
+| `telnyx.webhook_duplicate` | Telnyx sent an event ID again; acknowledged, not handled twice |
+| `telnyx.webhook_rejected` (`reason`) | 401. `bad_signature`: wrong `TELNYX_PUBLIC_KEY`, or not Telnyx. `stale_timestamp`: replay, or the clock is off. `missing_headers`: not Telnyx |
+| `telnyx.webhook_ignored` (debug) | A Telnyx event type we don't act on |
+| `telnyx.webhook_unconfigured` | 503: Telnyx isn't configured (`telnyx_enabled` off) |
+
+**Every webhook is rejected with `bad_signature`:** the public key in Key Vault doesn't match the account. Copy it again from **Keys & Credentials → Public Key**, `just secrets-push dev`, `just restart dev`.
+
+Event IDs are kept in the `WebhookEvents` table for two days, then pruned.
+
 ## Home Assistant
 
 ## When the doorbell doesn't ring

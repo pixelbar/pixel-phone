@@ -17,6 +17,8 @@ Until 1.0.0, releases stay on 0.x: `Added` bumps minor, `Fixed`/`Changed` (and t
 - `infra/secrets.manifest.yaml` lists every Key Vault secret (Telnyx key and public key, Home Assistant token, the accept API's keys, Sentry DSN). `just secrets-push <env>` and `just secrets-pull <env>` sync them with `.env.<env>`, showing which change but never a value, and `just restart <env>` makes the app read them again. Each secret's feature is off in Terraform until its secrets exist (#5).
 - The HTTP service: `GET /healthz`, `GET /version`, and a `POST /webhooks/telnyx` stub that logs each event's type and returns 200, so the webhook URL can be given to Telnyx. Config is validated at startup, logs are JSON with secrets redacted, and errors go to Sentry when `SENTRY_DSN` is set. Merges to `main` publish the image to GHCR, and **Deploy dev** (or `just deploy dev`) puts a branch on `pixel-phone-dev` (#6).
 - `just telnyx-sync <env>` makes the Telnyx Call Control application and the environment's numbers match `config/telnyx.<env>.yaml`: webhook URL, API version 2, first command timeout off, two inbound lines. It shows a diff and asks first; `--check` fails on drift made in the portal (#8).
+- Telnyx webhooks are verified (Ed25519 signature over the raw body, five-minute replay window) and de-duplicated by event ID in the `WebhookEvents` table. Bad signatures get 401 and a warning; verified call events are acknowledged at once and handed to the call flow (#9).
+- `just azurite` runs local Azure Storage in Docker for tests and `just dev`; CI starts it too (#9).
 
 ### Changed
 

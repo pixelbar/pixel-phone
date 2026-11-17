@@ -84,18 +84,35 @@ describe("loadConfig", () => {
 	it("accepts the ringing entity on its own, as Terraform sets it on dev before Home Assistant is", () => {
 		const config = loadConfig({
 			PIXEL_PHONE_ENV: "dev",
+			AZURE_STORAGE_ACCOUNT_NAME: "pixelphonedevst",
 			HOME_ASSISTANT_RINGING_ENTITY: HA.HOME_ASSISTANT_RINGING_ENTITY,
 		});
 		expect(config.homeAssistant).toBeUndefined();
+	});
+
+	it("needs a storage account outside local, and Azurite only locally", () => {
+		expect(problem({ PIXEL_PHONE_ENV: "dev" })).toMatch(/AZURE_STORAGE_ACCOUNT_NAME must be set/);
+		expect(
+			problem({
+				PIXEL_PHONE_ENV: "prod",
+				AZURE_STORAGE_ACCOUNT_NAME: "x",
+				AZURE_STORAGE_CONNECTION_STRING: "UseDevelopmentStorage=true",
+			}),
+		).toMatch(/local runs only/);
+		expect(
+			loadConfig({ AZURE_STORAGE_CONNECTION_STRING: "UseDevelopmentStorage=true" }).azure
+				.storageConnectionString,
+		).toBe("UseDevelopmentStorage=true");
 	});
 
 	it("keeps dev and local off the real siren", () => {
 		const real = { ...HA, HOME_ASSISTANT_RINGING_ENTITY: "input_boolean.pixel_phone_ringing" };
 		expect(problem({ ...real, PIXEL_PHONE_ENV: "dev" })).toMatch(/_dev helper/);
 		expect(problem(real)).toMatch(/_dev helper/);
-		expect(loadConfig({ ...real, PIXEL_PHONE_ENV: "prod" }).homeAssistant?.ringingEntity).toBe(
-			"input_boolean.pixel_phone_ringing",
-		);
+		expect(
+			loadConfig({ ...real, PIXEL_PHONE_ENV: "prod", AZURE_STORAGE_ACCOUNT_NAME: "x" })
+				.homeAssistant?.ringingEntity,
+		).toBe("input_boolean.pixel_phone_ringing");
 		expect(problem({ ...HA, HOME_ASSISTANT_RINGING_ENTITY: "light.siren" })).toMatch(
 			/input_boolean/,
 		);

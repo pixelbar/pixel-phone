@@ -75,3 +75,15 @@ Every setting is read in `src/config.ts`. This table grows as features land.
 
 | Variable | Required | Description |
 | -------- | -------- | ----------- |
+| `PIXEL_PHONE_ENV` | no (`local`) | `local`, `dev` or `prod`. Terraform sets it |
+| `PORT` | no (`3000`) | HTTP port |
+| `LOG_LEVEL` | no (`info`) | pino level |
+| `PIXEL_PHONE_VERSION`, `PIXEL_PHONE_GIT_SHA` | no | Baked into the image; `/version` reports them |
+| `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY` | together | Telnyx Call Control. Without them the webhook answers 503 |
+| `HOME_ASSISTANT_URL`, `HOME_ASSISTANT_TOKEN`, `HOME_ASSISTANT_RINGING_ENTITY` | together | Home Assistant. Outside prod the entity must end in `_dev` |
+| `API_KEYS_YAML` | no | The accept API's callers |
+| `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE` | no | Sentry |
+| `AZURE_CLIENT_ID` | in Azure | The app's managed identity |
+| `AZURE_STORAGE_ACCOUNT_NAME` | in dev and prod | Storage for calls, webhook IDs, the queue and recordings |
+| `AZURE_STORAGE_CONNECTION_STRING` | local only | `UseDevelopmentStorage=true` for Azurite (`just azurite`). Unset locally: state is kept in memory |
+| `PHONE_EVENTS_QUEUE`, `MEDIA_CONTAINER` | no | Queue and blob container names |

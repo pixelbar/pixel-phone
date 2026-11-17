@@ -42,6 +42,9 @@ const schema = z.object({
 	// Azure, set by Terraform on the Container App
 	AZURE_CLIENT_ID: text.optional(),
 	AZURE_STORAGE_ACCOUNT_NAME: text.optional(),
+	// Local only: Azurite (`UseDevelopmentStorage=true`). Azure uses the account name and
+	// the app's managed identity instead.
+	AZURE_STORAGE_CONNECTION_STRING: text.optional(),
 	PHONE_EVENTS_QUEUE: text.default("phone-events"),
 	MEDIA_CONTAINER: text.default("media"),
 });
@@ -70,6 +73,7 @@ export type Config = {
 	azure: {
 		clientId?: string;
 		storageAccount?: string;
+		storageConnectionString?: string;
 		eventsQueue: string;
 		mediaContainer: string;
 	};
@@ -137,6 +141,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 			`HOME_ASSISTANT_RINGING_ENTITY must be a _dev helper outside prod (PIXEL_PHONE_ENV=${data.PIXEL_PHONE_ENV})`,
 		);
 	}
+	if (data.PIXEL_PHONE_ENV !== "local") {
+		if (data.AZURE_STORAGE_ACCOUNT_NAME === undefined) {
+			problems.push(`AZURE_STORAGE_ACCOUNT_NAME must be set in ${data.PIXEL_PHONE_ENV}`);
+		}
+		if (data.AZURE_STORAGE_CONNECTION_STRING !== undefined) {
+			problems.push("AZURE_STORAGE_CONNECTION_STRING is for local runs only");
+		}
+	}
 	if (problems.length > 0) {
 		throw new ConfigError(`Invalid configuration:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
 	}
@@ -169,6 +181,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 			...(data.AZURE_CLIENT_ID ? { clientId: data.AZURE_CLIENT_ID } : {}),
 			...(data.AZURE_STORAGE_ACCOUNT_NAME
 				? { storageAccount: data.AZURE_STORAGE_ACCOUNT_NAME }
+				: {}),
+			...(data.AZURE_STORAGE_CONNECTION_STRING
+				? { storageConnectionString: data.AZURE_STORAGE_CONNECTION_STRING }
 				: {}),
 			eventsQueue: data.PHONE_EVENTS_QUEUE,
 			mediaContainer: data.MEDIA_CONTAINER,
