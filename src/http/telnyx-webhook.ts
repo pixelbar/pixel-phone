@@ -74,7 +74,9 @@ export async function telnyxWebhookRoutes(app: FastifyInstance, deps: TelnyxWebh
 		const { event } = parsed;
 		let first = true;
 		try {
-			first = await deps.seen.firstSeen(event.id, deps.clock.now());
+			// Partition by when the event happened, not when it arrived: a redelivery carries the
+			// same occurred_at, so it lands in the same day even across midnight.
+			first = await deps.seen.firstSeen(event.id, event.occurredAt);
 		} catch (error) {
 			// The call flow ignores repeats of what it already did, so handling a possible
 			// duplicate is safer than dropping an event.

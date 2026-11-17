@@ -48,6 +48,7 @@ export class TableSeenEvents implements SeenEvents {
 		let deleted = 0;
 		const rows = this.table.listEntities({
 			queryOptions: { filter: `PartitionKey lt '${cutoff}'`, select: ["PartitionKey", "RowKey"] },
+			abortSignal: AbortSignal.timeout(60_000),
 		});
 		for await (const row of rows) {
 			await this.table.deleteEntity(row.partitionKey as string, row.rowKey as string);
