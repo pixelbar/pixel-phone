@@ -7,7 +7,13 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!infra", "!**/*.sh", "!docs/events.schema.json"]
+		"includes": [
+			"**",
+			"!infra",
+			"!**/*.sh",
+			"!docs/events.schema.json",
+			"!docs/.vitepress/theme/pixel.css"
+		]
 	},
 	"formatter": {
 		"enabled": true,
@@ -36,5 +42,31 @@
 				"organizeImports": "on"
 			}
 		}
-	}
+	},
+	"overrides": [
+		{
+			"includes": ["docs/**/*.vue"],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"noUnusedImports": "off",
+						"noUnusedVariables": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["docs/.vitepress/theme/openapi.css"],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noImportantStyles": "off"
+					},
+					"style": {
+						"noDescendingSpecificity": "off"
+					}
+				}
+			}
+		}
+	]
 }

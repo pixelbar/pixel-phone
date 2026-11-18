@@ -1,0 +1,4 @@
+# The site is its own small project, separate from the app: its own lockfile and
+# dependencies, so nothing here reaches the pixel-phone image.
+allowBuilds:
+  esbuild: true

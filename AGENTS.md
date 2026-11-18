@@ -32,6 +32,7 @@ just fmt              # auto-format (Biome, and Terraform if `terraform` is on P
 just check-changelog  # fail if this branch does not change CHANGELOG.md vs origin/main
 just changelog-merge  # in a stopped merge/rebase: keep both sides' CHANGELOG [Unreleased] entries when safe
 just bump             # cut [Unreleased] into a dated version and bump package.json
+just docs-dev         # the docs site (docs/, VitePress) with hot reload; `just docs-build` must pass for site changes
 ```
 
 If you need a new repeatable task, add a `just` recipe instead of documenting a raw command.
@@ -50,7 +51,7 @@ src/
 tests/              # every *.test.ts, mirroring src/ (tests/core/x.test.ts tests src/core/x.ts)
 scripts/            # laptop and CI tools (changelog, secrets, Telnyx sync)
 infra/              # Terraform: bootstrap/, modules/pixel-phone, envs/dev, envs/prod
-docs/               # architecture, runbook, ADRs
+docs/               # architecture, runbook, ADRs; also the VitePress site at pixelbar.nl/pixel-phone (docs/AGENTS.md)
 CHANGELOG.md        # Keep a Changelog 1.1.0; most PRs add an Unreleased entry
 ```
 

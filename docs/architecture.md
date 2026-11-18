@@ -1,6 +1,6 @@
 # Architecture
 
-pixel-phone answers the Pixelbar doorbell. See the [README](../README.md) for the call state diagram.
+pixel-phone answers the Pixelbar doorbell. See the [overview](index.md#call-flow) for the call state diagram.
 
 ## Parts
 
