@@ -4,8 +4,12 @@ name: Terraform
 # change the result. A feature PR that never touches those should not download
 # Terraform. Azure plans run only when Terraform files under infra/ changed
 # (markdown does not count). Skipped plan jobs never start, so they never wait
-# on an Environment. This workflow does not apply. A plan for envs/prod is
-# added with the prod stack (#20).
+# on an Environment. This workflow does not apply.
+#
+# Only dev is planned here. GitHub Environment prod has a required reviewer and
+# deploys from main only, so a pull request can't use prod's identity, and a plan
+# on main would wait for an approval. A maintainer plans prod: `just tf-plan prod`.
+# Validate still checks envs/prod on every change.
 on:
   pull_request:
     # Positive patterns of the `terraform` list in .github/path-filters.yml

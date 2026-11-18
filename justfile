@@ -243,6 +243,50 @@ deploy-remote env ref="":
     gh workflow run deploy-dev.yml --ref main -f ref="$ref"
     echo "Started Deploy dev for $ref: gh run list --workflow deploy-dev.yml"
 
+# Start the Release workflow on main: cut [Unreleased] into a version, publish it, and roll
+# prod once a reviewer approves GitHub Environment prod (ADR 0011)
+[group('deploy')]
+[doc("Start the Release workflow on main (cuts a version; prod rolls after approval)")]
+release:
+    gh workflow run release.yml --ref main
+    @echo "Started Release on main. Approve prod when it asks: gh run list --workflow release.yml"
+
+# Put an env back on an image already on GHCR: a commit SHA or vX.Y.Z (`just rollback prod v0.2.0`).
+# Swaps the image only, like a deploy: secrets and Terraform are untouched. Prod asks first.
+# Needs `az login` and jq.
+[group('deploy')]
+[doc("Put an env back on an image already on GHCR: a commit SHA or vX.Y.Z (prod asks first)")]
+rollback env tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{env}}" in dev|prod) app="pixel-phone-{{env}}" ;; *) echo "env must be dev or prod" >&2; exit 1 ;; esac
+    image="ghcr.io/pixelbar/pixel-phone:{{tag}}"
+    show() { az containerapp show -g "$app" -n "$app" --query "$1" -o tsv; }
+    running_env="$(show "properties.template.containers[0].env[?name=='PIXEL_PHONE_ENV'].value | [0]")"
+    if [ "$running_env" != "{{env}}" ]; then echo "$app doesn't say PIXEL_PHONE_ENV={{env}} (got '$running_env'). Refusing." >&2; exit 1; fi
+    # Azure pulls anonymously, so check the tag the same way.
+    token="$(curl -fsS "https://ghcr.io/token?scope=repository:pixelbar/pixel-phone:pull" | jq -r .token)"
+    if ! curl -fsS -o /dev/null -H "Authorization: Bearer $token" \
+        -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json" \
+        "https://ghcr.io/v2/pixelbar/pixel-phone/manifests/{{tag}}"; then
+      echo "$image can't be pulled from GHCR. Nothing changed." >&2; exit 1
+    fi
+    echo "$app runs $(show "properties.template.containers[0].image"); rolling to $image."
+    if [ "{{env}}" = prod ]; then
+      read -r -p 'This changes the PROD doorbell. Type "prod" to go on: ' answer
+      [ "$answer" = prod ] || { echo "Nothing changed." >&2; exit 1; }
+    fi
+    az containerapp update -g "$app" -n "$app" --image "$image" --min-replicas 1 --max-replicas 1 --only-show-errors -o none
+    fqdn="$(show properties.configuration.ingress.fqdn)"
+    for i in $(seq 1 30); do
+      if [ "$(show properties.latestReadyRevisionName)" = "$(show properties.latestRevisionName)" ] \
+          && curl -fsS --max-time 10 "https://$fqdn/healthz" >/dev/null; then
+        curl -fsS "https://$fqdn/version"; echo; exit 0
+      fi
+      sleep 5
+    done
+    echo "$app's new revision wasn't ready within 150 s. Check it in the portal." >&2; exit 1
+
 # Install the docs site's dependencies (docs/ is its own pnpm project with its own lockfile)
 [group('docs')]
 docs-install:

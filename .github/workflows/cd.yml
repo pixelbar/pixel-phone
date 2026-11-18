@@ -2,7 +2,7 @@ name: CD
 
 # Merges to main publish ghcr.io/pixelbar/pixel-phone:<sha> and :main, and a Sentry
 # release when Sentry is configured. This workflow never logs in to Azure: dev is
-# rolled by Deploy dev (or `just deploy dev`), prod by the Release workflow (#20).
+# rolled by Deploy dev (or `just deploy dev`), prod by the Release workflow (release.yml).
 on:
   push:
     branches: [main]

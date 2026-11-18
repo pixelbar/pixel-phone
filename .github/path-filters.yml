@@ -55,6 +55,7 @@ image:
   - ".github/workflows/ci.yml"
   - ".github/workflows/cd.yml"
   - ".github/workflows/deploy-dev.yml"
+  - ".github/workflows/release.yml"
 
 # The site in docs/ (its own pnpm project) and what lints or builds it.
 docs:

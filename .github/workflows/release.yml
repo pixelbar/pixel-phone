@@ -1,0 +1,361 @@
+name: Release
+
+# A maintainer cuts a release from main (Actions → Release → Run workflow, or
+# `just release`). ADR 0011, after Pixel ADR 0013:
+#
+#   check      `just check` on the commit being released
+#   bump       `just bump --commit`: CHANGELOG [Unreleased] → vX.Y.Z (Added → minor,
+#              Fixed/Changed → patch, never major before 1.0), pushes the commit and
+#              tag, opens a GitHub Release
+#   publish    rebuilds GHCR from the release commit: :<sha>, :vX.Y.Z and :main
+#   sentry     the Sentry release for that SHA, environment prod (skipped with a
+#              warning until SENTRY_AUTH_TOKEN is set, as in CD)
+#   prod-cd    after a reviewer approves GitHub Environment `prod`, rolls
+#              pixel-phone-prod to :<sha> with `az containerapp update`
+#   docs       publishes the docs site from the release commit (docs.yml)
+#
+# Merges to main never roll prod. This workflow never applies Terraform and never
+# touches pixel-phone-dev.
+on:
+  workflow_dispatch:
+
+# Least privilege at the workflow level. Jobs raise what they need.
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# Actions are pinned to commit SHAs (with the version in a comment) so a
+# moved or compromised tag can't change what runs here.
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  # CI on main may have been cancelled or red, so test the commit being released
+  # before anything is tagged. The bump commit on top only changes CHANGELOG.md and
+  # package.json's version.
+  check:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - uses: pnpm/action-setup@d9184bf108216479bc5a137cc391f4d7b14c870b # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start Azurite
+        run: just azurite
+
+      - name: Lint, typecheck, test with coverage thresholds
+        run: just check
+
+  bump:
+    name: Version bump
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.cut.outputs.version }}
+      tag: ${{ steps.cut.outputs.tag }}
+      sha: ${{ steps.cut.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@d9184bf108216479bc5a137cc391f4d7b14c870b # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cut Unreleased into a version
+        id: cut
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Cut releases from main (got ${GITHUB_REF_NAME})."
+            exit 1
+          fi
+          notes="${RUNNER_TEMP}/release-notes.md"
+          before="$(git rev-parse HEAD)"
+          subject="$(git log -1 --pretty=%s)"
+          just bump --commit --notes-file "${notes}"
+          after="$(git rev-parse HEAD)"
+          version="$(node -p "require('./package.json').version")"
+          if [ "${before}" = "${after}" ]; then
+            # A re-run after the bump was pushed: carry on with that version.
+            if [ "${subject}" != "Release v${version}" ]; then
+              echo "::error::No Unreleased notes in CHANGELOG.md. Add entries, merge to main, then run this workflow."
+              exit 1
+            fi
+            echo "HEAD is already Release v${version}; continuing without another bump."
+          else
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+            git push origin --tags
+          fi
+          if [ ! -s "${notes}" ]; then
+            echo "::error::Release notes for v${version} are empty."
+            exit 1
+          fi
+          sha="$(git rev-parse HEAD)"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "tag=v${version}" >> "${GITHUB_OUTPUT}"
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+          if gh release view "v${version}" >/dev/null 2>&1; then
+            echo "GitHub Release v${version} already exists."
+          else
+            gh release create "v${version}" --title "v${version}" --notes-file "${notes}" --target "${sha}"
+          fi
+
+  publish:
+    name: Publish GHCR (:sha, :vX.Y.Z, :main)
+    needs: bump
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.pin }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.bump.outputs.sha }}
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        env:
+          SHA: ${{ needs.bump.outputs.sha }}
+          VERSION: ${{ needs.bump.outputs.version }}
+        run: |
+          pin="${IMAGE_NAME}:${SHA}"
+          tags="${pin},${IMAGE_NAME}:v${VERSION},${IMAGE_NAME}:main"
+          echo "pin=${pin}" >> "${GITHUB_OUTPUT}"
+          echo "tags=${tags}" >> "${GITHUB_OUTPUT}"
+          echo "Publishing ${tags}"
+
+      # The version is the SHA, as in CD: /version reports it and it is the Sentry release.
+      - name: Build and push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            PIXEL_PHONE_VERSION=${{ needs.bump.outputs.sha }}
+            PIXEL_PHONE_GIT_SHA=${{ needs.bump.outputs.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Fail if the image contains an env file
+        env:
+          PIN: ${{ steps.meta.outputs.pin }}
+        run: |
+          docker pull "${PIN}"
+          if docker run --rm --entrypoint sh "${PIN}" -c 'test -e /app/.env || ls /app/.env.* >/dev/null 2>&1'; then
+            echo "::error::Image ${PIN} contains an env file. Do not deploy it."
+            exit 1
+          fi
+          echo "No env files in ${PIN}."
+
+      # Azure pulls anonymously (the Container App has no registry block), so stop
+      # here, before anyone approves prod, if the package isn't public.
+      - name: Check the image can be pulled anonymously
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ needs.bump.outputs.sha }}
+        run: |
+          set -euo pipefail
+          token="$(curl -fsS "https://ghcr.io/token?scope=repository:${REPO}:pull" | jq -r .token)"
+          status="$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${token}" \
+            -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json" \
+            "https://ghcr.io/v2/${REPO}/manifests/${SHA}")"
+          if [ "${status}" != "200" ]; then
+            echo "::error::Anonymous pull of ghcr.io/${REPO}:${SHA} returned ${status}. A maintainer makes the package public: GitHub → Packages → pixel-phone → Package settings → Change visibility → Public. Then re-run failed jobs."
+            exit 1
+          fi
+
+  sentry-release:
+    name: Sentry release (prod)
+    needs: [bump, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+    steps:
+      # As in CD: until a maintainer sets SENTRY_AUTH_TOKEN (secret), SENTRY_ORG and
+      # SENTRY_PROJECT (variables), the release is skipped with a warning. Errors are
+      # still reported; their stack traces just point at dist/*.js.
+      - name: Check Sentry is configured
+        id: configured
+        run: |
+          if [ -z "${SENTRY_AUTH_TOKEN}" ] || [ -z "${SENTRY_ORG}" ] || [ -z "${SENTRY_PROJECT}" ]; then
+            echo "::warning::Sentry isn't configured for this repository (SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT), so no release or source maps were uploaded."
+            echo "ok=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "ok=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ steps.configured.outputs.ok == 'true' }}
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ needs.bump.outputs.sha }}
+
+      - uses: pnpm/action-setup@d9184bf108216479bc5a137cc391f4d7b14c870b # v6.1.0
+        if: ${{ steps.configured.outputs.ok == 'true' }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ steps.configured.outputs.ok == 'true' }}
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install and compile (source maps)
+        if: ${{ steps.configured.outputs.ok == 'true' }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec tsc -p tsconfig.build.json
+
+      - name: Create the Sentry release and upload source maps
+        if: ${{ steps.configured.outputs.ok == 'true' }}
+        uses: getsentry/action-release@6fb9aeade7061441cf3864e34fbe11a1457ad7dc # v3.7.1
+        with:
+          environment: prod
+          release: ${{ needs.bump.outputs.sha }}
+          sourcemaps: dist
+          inject: false
+          url_prefix: /app/dist
+          set_commits: auto
+          ignore_missing: true
+          disable_telemetry: true
+
+  prod-cd:
+    name: Roll pixel-phone-prod
+    needs: [bump, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Required reviewers and deploys from main only (infra/bootstrap/README.md).
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RESOURCE_GROUP: pixel-phone-prod
+      APP_NAME: pixel-phone-prod
+    steps:
+      - name: Require ARM_* on GitHub Environment prod
+        env:
+          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+        run: |
+          missing=0
+          for name in ARM_CLIENT_ID ARM_TENANT_ID ARM_SUBSCRIPTION_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::${name} is not set on GitHub Environment prod (a variable, not a secret)."
+              missing=1
+            fi
+          done
+          if [ "${missing}" -ne 0 ]; then
+            echo "Fail closed. ${{ needs.publish.outputs.image }} was published; prod was not touched."
+            exit 1
+          fi
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Roll and wait for the new version
+        env:
+          IMAGE: ${{ needs.publish.outputs.image }}
+          SHA: ${{ needs.bump.outputs.sha }}
+          TAG: ${{ needs.bump.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! az containerapp show -g "${RESOURCE_GROUP}" -n "${APP_NAME}" -o none 2>/dev/null; then
+            echo "::error::${APP_NAME} doesn't exist yet. A maintainer applies infra/envs/prod (PIXEL_PHONE_APPLY_PROD=1 just tf-apply prod). This job never applies Terraform."
+            exit 1
+          fi
+          env_name="$(az containerapp show -g "${RESOURCE_GROUP}" -n "${APP_NAME}" --query "properties.template.containers[0].env[?name=='PIXEL_PHONE_ENV'].value | [0]" -o tsv)"
+          if [ "${env_name}" != "prod" ]; then
+            echo "::error::${APP_NAME} doesn't say PIXEL_PHONE_ENV=prod (got '${env_name}'). Refusing."
+            exit 1
+          fi
+          previous="$(az containerapp show -g "${RESOURCE_GROUP}" -n "${APP_NAME}" --query "properties.template.containers[0].image" -o tsv)"
+          echo "Was running ${previous}"
+          az containerapp update -g "${RESOURCE_GROUP}" -n "${APP_NAME}" \
+            --image "${IMAGE}" --min-replicas 1 --max-replicas 1 --only-show-errors -o none
+          fqdn="$(az containerapp show -g "${RESOURCE_GROUP}" -n "${APP_NAME}" --query properties.configuration.ingress.fqdn -o tsv)"
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 10 "https://${fqdn}/version" | grep -q "\"${SHA}\""; then
+              curl -fsS "https://${fqdn}/version"
+              echo
+              echo "::notice::pixel-phone-prod runs ${TAG} (${SHA}). To roll back: just rollback prod ${previous##*:}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::pixel-phone-prod didn't report ${SHA} within 150 s. It was running ${previous}; to roll back: just rollback prod ${previous##*:}"
+          exit 1
+
+  # docs.yml's deploy job uses the github-pages environment, which deploys from main.
+  docs:
+    name: Docs site
+    needs: bump
+    uses: ./.github/workflows/docs.yml
+    with:
+      ref: ${{ needs.bump.outputs.sha }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

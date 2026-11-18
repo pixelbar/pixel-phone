@@ -6,7 +6,7 @@ name: Docs site
 # it calls this workflow with the released commit, so the live site describes the
 # released service. workflow_dispatch republishes by hand without cutting a version.
 #
-# The Release workflow (#20) calls it like this, after its bump job:
+# The Release workflow (release.yml) calls it like this, after its bump job:
 #
 #   docs:
 #     needs: bump

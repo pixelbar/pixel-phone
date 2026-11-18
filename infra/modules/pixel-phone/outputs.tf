@@ -3,6 +3,15 @@ output "fqdn" {
   description = "The app's public hostname. Telnyx's webhook is https://<fqdn>/webhooks/telnyx."
 }
 
+output "domain_verification_id" {
+  value       = azurerm_container_app_environment.this.custom_domain_verification_id
+  description = "The TXT record at asuid.<host> each custom domain needs before it can be added to custom_domains."
+}
+
+output "custom_domains" {
+  value = var.custom_domains
+}
+
 output "container_app_name" {
   value = azurerm_container_app.this.name
 }
