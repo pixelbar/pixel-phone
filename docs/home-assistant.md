@@ -6,7 +6,7 @@ Home Assistant owns the siren ([ADR 0005](adr/0005-home-assistant-owns-the-siren
 | --- | --- | --- |
 | Helper | `input_boolean.pixel_phone_ringing_dev` "Pixel Phone ringing (dev)" (nothing is attached to it) | `input_boolean.pixel_phone_ringing` "Pixel Phone ringing" |
 | URL | the Nabu Casa URL, `home_assistant_url` in `infra/envs/<env>/terraform.example.tfvars` | same |
-| Accept action | `rest_command.pixel_phone_accept_dev` | `rest_command.pixel_phone_accept` (with prod, #20) |
+| Accept action | `rest_command.pixel_phone_accept_dev` | `rest_command.pixel_phone_accept`, to `https://phone.pixelbar.nl` |
 | Accept key in HA | `pixel_phone_dev_accept_authorization` in `secrets.yaml` | `pixel_phone_accept_authorization` |
 | HA user | `pixel-phone`, not an administrator, one token per environment | same user |
 

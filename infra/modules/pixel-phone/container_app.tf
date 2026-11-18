@@ -32,6 +32,11 @@ resource "azurerm_container_app" "this" {
       condition     = var.environment != "dev" || var.home_assistant_ringing_entity == null || endswith(coalesce(var.home_assistant_ringing_entity, "_dev"), "_dev")
       error_message = "dev must flip a _dev helper, never the real siren's (ADR 0005)."
     }
+
+    precondition {
+      condition     = var.environment != "prod" || !endswith(coalesce(var.home_assistant_ringing_entity, "unset"), "_dev")
+      error_message = "prod must flip the real ringing helper, not dev's _dev one."
+    }
   }
 
   identity {

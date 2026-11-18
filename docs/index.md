@@ -74,6 +74,7 @@ Leaving `ringing` always turns the Home Assistant switch off. Home Assistant may
 | [Accept API](accept-api.md) | How Home Assistant and Pixel accept a call |
 | [Call events for Pixel](events.md) | The `phone-events` queue contract |
 | [Home Assistant](home-assistant.md) | Connecting an environment, the accept button and the token |
+| [Setting up from nothing](setup.md) | Every account, stack, secret and setting, in order, from an empty subscription to prod |
 | [Runbook](runbook.md) | Deploying, secrets, Telnyx, testing a real call, and what to do when the doorbell doesn't ring |
 | Decisions | The ADRs, in the sidebar. Don't reopen one because an old issue says otherwise: write a new ADR that supersedes it |
 

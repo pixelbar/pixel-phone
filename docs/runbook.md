@@ -1,6 +1,6 @@
 # Runbook
 
-How to run pixel-phone. Sections are filled in as the pieces land.
+How to run pixel-phone day to day. To build an environment from an empty subscription, start with [Setting up from nothing](setup.md).
 
 ## Deploying
 
@@ -9,15 +9,41 @@ How to run pixel-phone. Sections are filled in as the pieces land.
 | A merge to `main` | CD publishes `ghcr.io/pixelbar/pixel-phone:<sha>` and `:main`, and a Sentry release if `SENTRY_AUTH_TOKEN` is set. It never touches Azure |
 | A branch or PR onto dev | **Actions → Deploy dev → Run workflow**, or `just deploy-remote dev <branch or PR number>`. Runs `just check`, publishes `:<sha>` and `:dev`, and rolls `pixel-phone-dev` |
 | This working tree onto dev | `just deploy dev`. Needs Docker, `az login`, and `gh auth refresh -s write:packages` once |
-| prod | The Release workflow (#20) |
+| prod | A release: `just release` (or **Actions → Release → Run workflow** on `main`), then approve **prod**. See [Releasing](#releasing) |
+| Back to an earlier image | `just rollback <env> <sha or vX.Y.Z>`. See [Rolling back](#rolling-back) |
 
 Deploys replace whatever dev runs. Say so in the team chat first.
 
-**Dev URL:** `https://pixel-phone-dev.ashysky-f402cc54.westeurope.azurecontainerapps.io`. The Telnyx webhook is `/webhooks/telnyx` on it.
-
-**Rollback:** `az containerapp update -g pixel-phone-dev -n pixel-phone-dev --image ghcr.io/pixelbar/pixel-phone:<previous sha>`.
+| | dev | prod |
+| --- | --- | --- |
+| URL | `https://pixel-phone-dev.ashysky-f402cc54.westeurope.azurecontainerapps.io` | `https://phone.pixelbar.nl` (and the app's own `*.azurecontainerapps.io` name, the `fqdn` output) |
+| Telnyx webhook | `/webhooks/telnyx` on it | `https://phone.pixelbar.nl/webhooks/telnyx` |
+| Ringing helper | `input_boolean.pixel_phone_ringing_dev` (nothing attached) | `input_boolean.pixel_phone_ringing` |
 
 **Always warm:** each environment runs exactly one replica and never scales to zero (ADR 0003, amended by #29). A cold start measured 24.9 s on 2026-11-11, longer than the 15 s accept window. A deploy still replaces the replica, so a call during a roll can be missed: deploy outside opening hours.
+
+### Releasing
+
+A release is the only way code reaches prod ([ADR 0011](adr/0011-releases-and-prod.md)). Merges collect under `## [Unreleased]` in `CHANGELOG.md` until someone releases.
+
+1. Outside opening hours, `just release` (or **Actions → Release → Run workflow** on `main`).
+2. The workflow runs `just check`, cuts `[Unreleased]` into `vX.Y.Z` (`just bump --commit`: Added → minor, Fixed/Changed → patch), pushes the `Release vX.Y.Z` commit and tag, opens a GitHub Release, publishes `ghcr.io/pixelbar/pixel-phone:<sha>`, `:vX.Y.Z` and `:main`, makes the Sentry release (environment `prod`) and publishes the docs site.
+3. **Roll pixel-phone-prod** waits for a reviewer on Environment `prod`. Approve it in the run (**Review deployments**). It runs `az containerapp update` to `:<sha>` and waits until `/version` reports that SHA. Its summary names the image prod ran before, for a rollback.
+4. Check: `curl -sS https://phone.pixelbar.nl/version`, and the logs for `process.started`.
+
+If a job fails after the tag exists, **Re-run failed jobs**: it carries on with the same version. "No Unreleased notes" means there is nothing to release. Rejecting the approval leaves prod as it was; the version, image and GitHub Release stay.
+
+The workflow never applies Terraform. An infra change is `PIXEL_PHONE_APPLY_PROD=1 just tf-apply prod` from a laptop, after `just tf-plan prod`.
+
+### Rolling back
+
+```sh
+just rollback prod v0.3.0          # or the previous commit SHA
+```
+
+It checks the app says `PIXEL_PHONE_ENV=prod` and that the image can be pulled, asks you to type `prod`, swaps the image (secrets and Terraform are untouched) and waits for the new revision. The previous release is on the [releases page](https://github.com/pixelbar/pixel-phone/releases), or in the summary of the release that broke things. Without `just`: `az containerapp update -g pixel-phone-prod -n pixel-phone-prod --image ghcr.io/pixelbar/pixel-phone:<previous sha>`.
+
+A rollback isn't recorded anywhere but Azure: say so in the team chat, and fix forward with a new release. dev is the same with `just rollback dev <sha>`.
 
 ## Secrets
 
@@ -40,12 +66,28 @@ To set or change one:
 
 `just secrets-pull dev` goes the other way, after showing what changes. `just validate-secrets` checks the manifest.
 
+**prod never gets dev's values.** `.env.prod` is its own file, and `just secrets-push prod` refuses a file that says `PIXEL_PHONE_ENV=dev`. Prod pushes always ask you to type `prod`.
+
+### Rotating a secret
+
+Each one the same way: put the new value in `.env.<env>`, `just secrets-push <env>`, `just restart <env>`, check, then revoke the old value. Between the restart and updating a caller, that caller fails, so rotate outside opening hours.
+
+| Secret | Where the new value comes from | Check, then revoke the old one |
+| --- | --- | --- |
+| `telnyx-api-key` | Telnyx portal → **Keys & Credentials → API Keys → Create** (one key per environment, so either can be revoked alone) | `just telnyx-sync <env> --check --from-vault` passes; delete the old key in the portal |
+| `telnyx-public-key` | **Keys & Credentials → Public Key**. It is the account's, the same for dev and prod, and changes only if Telnyx rotates it | The next call logs `telnyx.webhook`, not `bad_signature` |
+| `home-assistant-token` | A new token for the `pixel-phone` user ([Home Assistant](home-assistant.md#connecting-an-environment), step 2), named after the environment | Step 5 there flips the helper; delete the old token on the user's profile |
+| `api-keys-yaml` | `just api-key <caller>` for the caller being rotated, replacing only its line | Update the caller (Home Assistant's `secrets.yaml`, Pixel's Key Vault), then a test accept answers `404` with nothing ringing |
+| `sentry-dsn` | Sentry → project `pixel-phone` → **Client Keys (DSN)** → new key | The logs show `process.started` and no Sentry warning; disable the old key in Sentry |
+
+A leaked value: rotate it at once, even in opening hours. The doorbell keeps working through a Telnyx or Home Assistant rotation, because a failure there only means the call rings out.
+
 ## Telnyx
 
 | | dev | prod |
 | --- | --- | --- |
 | Number | `+31103024128` (until prod has its own, #21) | not ordered yet |
-| Call Control application | `Pixel Phone` (made in the portal) | `pixel-phone-prod` (#20) |
+| Call Control application | `Pixel Phone` (made in the portal) | `pixel-phone-prod`, made by `just telnyx-sync prod` |
 | Webhook URL | `https://pixel-phone-dev.ashysky-f402cc54.westeurope.azurecontainerapps.io/webhooks/telnyx` | `https://phone.pixelbar.nl/webhooks/telnyx` |
 
 ### `just telnyx-sync`: the application and numbers as code
@@ -117,6 +159,10 @@ az containerapp logs show -g pixel-phone-dev -n pixel-phone-dev --follow --forma
 ```
 
 Every outcome is one `call.<outcome>` line with `callId`, `from`, `to` and `via`/`by`. A failing dependency is `<area>.failed` and a Sentry issue tagged `area`.
+
+## Setting up prod
+
+[Setting up from nothing](setup.md#_5-prod) has the steps, in order, from the first apply to the prod number.
 
 ## Calls
 
@@ -219,7 +265,7 @@ These pages are published at `https://pixelbar.nl/pixel-phone/` from `docs/` ([`
 | What | How |
 | --- | --- |
 | A pull request that touches `docs/` | The **Docs site** workflow lints and builds it. A dead link fails the build. Nothing is published |
-| A release | The Release workflow (#20) calls **Docs site** with the release commit and publishes it |
+| A release | The Release workflow calls **Docs site** with the release commit and publishes it |
 | Republish without a release | **Actions → Docs site → Run workflow** on `main` |
 | On a laptop | `just docs-install` once, then `just docs-dev` |
 | Refresh the theme from pixelbar.nl/pixel | `just pixel-theme`, then commit `docs/.vitepress/theme/pixel.css` |
@@ -238,7 +284,9 @@ Work from the outside in. Nothing here ever answers a call by itself: doing noth
 
 | Symptom | Look at | Likely cause and fix |
 | --- | --- | --- |
-| No `telnyx.webhook` lines at all | `curl https://<url>/healthz`; Telnyx portal → the app → webhook URL; `just telnyx-sync <env> --check` | App down (roll back, see [Deploying](#deploying)), or the webhook URL drifted (`just telnyx-sync <env>`) |
+| No `telnyx.webhook` lines at all | `curl https://<url>/healthz`; Telnyx portal → the app → webhook URL; `just telnyx-sync <env> --check` | App down (roll back, see [Rolling back](#rolling-back)), or the webhook URL drifted (`just telnyx-sync <env>`) |
+| prod: `phone.pixelbar.nl` fails but the `fqdn` output answers | `dig CNAME phone.pixelbar.nl`; `curl -v https://phone.pixelbar.nl/healthz` (certificate) | The CNAME or `asuid` TXT record was changed, or the certificate couldn't renew without them. Put the records back ([`infra/envs/prod/README.md`](../infra/envs/prod/README.md)). Meanwhile Telnyx uses `failover_host` if it is set |
+| Broke right after a release | The release's run; `/version` | `just rollback prod <previous version>`, then fix forward |
 | `telnyx.webhook_rejected` with `bad_signature` | Key Vault `telnyx-public-key` | Public key wrong: copy it from the portal, `just secrets-push`, `just restart` |
 | `call.busy` for every call | `Calls` table: is a call stuck `ringing`/`accepting`? | Stuck calls retire on their own (15 s / 3 min). If not, `just restart <env>` recovers them |
 | `call.ringing` but no siren | `home-assistant.failed` lines | Token or helper (see [Home Assistant](home-assistant.md)). If HA flipped the helper, it's HA's automation |

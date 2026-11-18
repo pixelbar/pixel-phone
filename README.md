@@ -91,6 +91,6 @@ Leaving `ringing` always turns the Home Assistant switch off. Home Assistant may
 
 ## Status
 
-The call flow works end to end on dev: Telnyx webhooks, the state machine, Home Assistant, the queue for Pixel, the accept API and the recording. Still to come: Pixel's side (#19), Home Assistant's automations (#18) and prod (#20, #21). See the [runbook](docs/runbook.md) to run or test it.
+The call flow works end to end on dev: Telnyx webhooks, the state machine, Home Assistant, the queue for Pixel, the accept API and the recording. Still to come: Home Assistant's automations (#18) and prod's number (#21). prod's stack, `phone.pixelbar.nl` and the Release workflow exist (#20), but nothing is applied yet. See the [runbook](docs/runbook.md) to run or test it.
 
 The documentation is also published at [pixelbar.nl/pixel-phone](https://pixelbar.nl/pixel-phone/).

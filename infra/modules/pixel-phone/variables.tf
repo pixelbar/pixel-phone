@@ -69,6 +69,12 @@ variable "recording_accepted" {
   default     = "accepted.mp3"
 }
 
+variable "custom_domains" {
+  type        = set(string)
+  description = "Hostnames to serve, each with a managed certificate (domain.tf). Add one only after its CNAME and asuid TXT records exist. Applying needs the az CLI."
+  default     = []
+}
+
 variable "extra_env" {
   type        = map(string)
   description = "Plain (non-secret) environment variables for the container, on top of the ones the module sets."

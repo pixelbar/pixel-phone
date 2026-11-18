@@ -135,7 +135,10 @@ export default defineConfig({
 			},
 			{
 				text: "Operations",
-				items: [{ text: "Runbook", link: "/runbook" }],
+				items: [
+					{ text: "Setting up from nothing", link: "/setup" },
+					{ text: "Runbook", link: "/runbook" },
+				],
 			},
 			{ text: "Decisions", collapsed: false, items: adrs() },
 		],

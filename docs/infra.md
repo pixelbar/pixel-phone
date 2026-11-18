@@ -6,9 +6,9 @@ pixel-phone runs on Azure Container Apps in the Pixelbar subscription (`d150e252
 | --- | --- | --- |
 | [`infra/bootstrap`](../infra/bootstrap) | an Owner, by hand, once | resource groups, state containers, GitHub OIDC identities ([ADR 0010](adr/0010-terraform-bootstrap-and-oidc.md)) |
 | [`infra/envs/dev`](../infra/envs/dev) | a maintainer, `just tf-apply dev` | one environment of [`modules/pixel-phone`](../infra/modules/pixel-phone) |
-| `infra/envs/prod` | a maintainer, `PIXEL_PHONE_APPLY_PROD=1 just tf-apply prod` | the same module (#20) |
+| [`infra/envs/prod`](../infra/envs/prod) | a maintainer, `PIXEL_PHONE_APPLY_PROD=1 just tf-apply prod` | the same module, with `phone.pixelbar.nl` and Key Vault purge protection ([ADR 0011](adr/0011-releases-and-prod.md)) |
 
-CI validates every stack and plans dev on pull requests that touch `infra/` (`terraform.yml`). Nothing applies from CI.
+CI validates every stack and plans dev on pull requests that touch `infra/` (`terraform.yml`). prod is planned by a maintainer (`just tf-plan prod`): Environment `prod` deploys from `main` only and needs an approval. Nothing applies from CI.
 
 ## One environment
 
@@ -61,4 +61,8 @@ Maintainers are listed by name in each environment's `maintainer_principal_ids` 
 
 ## Images
 
-The Container App is created from `container_image`, then Terraform ignores the image. Deploys swap it with `az containerapp update` ([ADR 0003](adr/0003-container-apps.md)). dev was created with a placeholder (`traefik/whoami`, told to listen on port 3000) and has run pixel-phone since the first deploy (#6).
+The Container App is created from `container_image`, then Terraform ignores the image. Deploys swap it with `az containerapp update` ([ADR 0003](adr/0003-container-apps.md)). dev was created with a placeholder (`traefik/whoami`, told to listen on port 3000) and has run pixel-phone since the first deploy (#6). prod is created from `:main`; after that only the Release workflow (or `just rollback prod`) changes its image.
+
+## Custom domains
+
+`custom_domains` binds a hostname with a free managed certificate (prod: `phone.pixelbar.nl`). DNS is outside Azure, so its CNAME and `asuid` TXT records are made by hand before the hostname is listed ([`infra/envs/prod/README.md`](../infra/envs/prod/README.md)). [`domain.tf`](../infra/modules/pixel-phone/domain.tf) attaches the hostname, issues the certificate and binds it in one apply, through `hostname.sh` as spacestate does, so that apply needs the az CLI.
