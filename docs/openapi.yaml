@@ -5,7 +5,8 @@ info:
   description: |
     Accepting a doorbell call makes pixel-phone answer it and play the accept
     recording. Callers: Home Assistant's button (`current`) and Pixel (by call ID).
-    See docs/events.md for the events that announce calls.
+    The events that announce calls are in
+    [Call events for Pixel](https://pixelbar.nl/pixel-phone/events) (docs/events.md).
 servers:
   - url: https://pixel-phone-dev.ashysky-f402cc54.westeurope.azurecontainerapps.io
     description: dev
@@ -13,11 +14,15 @@ servers:
     description: prod
 security:
   - bearer: []
+tags:
+  - name: Accept
+    description: Pick up the doorbell call. The first accept wins, from either caller.
 paths:
   /api/v1/calls/current/accept:
     post:
       summary: Accept the call ringing now
       operationId: acceptCurrent
+      tags: [Accept]
       requestBody:
         $ref: "#/components/requestBodies/Accept"
       responses:
@@ -33,6 +38,7 @@ paths:
     post:
       summary: Accept a call by its ID (from a ringing event)
       operationId: acceptCall
+      tags: [Accept]
       parameters:
         - name: callId
           in: path

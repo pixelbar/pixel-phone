@@ -242,3 +242,28 @@ deploy-remote env ref="":
     ref="{{ref}}"; [ -n "$ref" ] || ref="$(git branch --show-current)"
     gh workflow run deploy-dev.yml --ref main -f ref="$ref"
     echo "Started Deploy dev for $ref: gh run list --workflow deploy-dev.yml"
+
+# Install the docs site's dependencies (docs/ is its own pnpm project with its own lockfile)
+[group('docs')]
+docs-install:
+    pnpm --dir docs install
+
+# Run the docs site locally with hot reload (http://localhost:5173)
+[group('docs')]
+docs-dev:
+    pnpm --dir docs run dev
+
+# Build the docs site into docs/.vitepress/dist. Fails on a dead link. DOCS_BASE sets the base path
+[group('docs')]
+docs-build:
+    pnpm --dir docs run build
+
+# Serve the built docs site (after `just docs-build`)
+[group('docs')]
+docs-preview:
+    pnpm --dir docs run preview
+
+# Refresh docs/.vitepress/theme/pixel.css from the live pixelbar.nl/pixel site, as spacestate does
+[group('docs')]
+pixel-theme:
+    @./scripts/pixel-theme.sh

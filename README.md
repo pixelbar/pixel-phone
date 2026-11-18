@@ -43,6 +43,8 @@ Try `--accept-via pixel`, `--hangup-after 2`, `--second-call`, `--ha-down`, `--q
 
 ## Call states
 
+<!-- The docs site's overview (docs/index.md) has a copy of this diagram: change both. -->
+
 ```mermaid
 stateDiagram-v2
     direction TB
@@ -90,3 +92,5 @@ Leaving `ringing` always turns the Home Assistant switch off. Home Assistant may
 ## Status
 
 The call flow works end to end on dev: Telnyx webhooks, the state machine, Home Assistant, the queue for Pixel, the accept API and the recording. Still to come: Pixel's side (#19), Home Assistant's automations (#18) and prod (#20, #21). See the [runbook](docs/runbook.md) to run or test it.
+
+The documentation is also published at [pixelbar.nl/pixel-phone](https://pixelbar.nl/pixel-phone/).

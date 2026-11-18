@@ -9,6 +9,7 @@
 #
 # check     → just check + just build (ci.yml)
 # image     → Docker smoke (ci.yml) and GHCR (cd.yml)
+# docs      → the Docs site build (docs.yml's own paths trigger, kept equal by the test)
 # terraform → just tf-validate (terraform.yml)
 # stack     → Azure plans (terraform.yml); markdown under infra/ does not count
 
@@ -54,6 +55,19 @@ image:
   - ".github/workflows/ci.yml"
   - ".github/workflows/cd.yml"
   - ".github/workflows/deploy-dev.yml"
+
+# The site in docs/ (its own pnpm project) and what lints or builds it.
+docs:
+  - "docs/**"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "biome.json"
+  - ".gitignore"
+  - ".nvmrc"
+  - "justfile"
+  - ".github/workflows/docs.yml"
+  - ".github/path-filters.yml"
 
 # Markdown under infra/ does not change the stack.
 terraform:

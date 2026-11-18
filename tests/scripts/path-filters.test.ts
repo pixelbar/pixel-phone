@@ -86,7 +86,7 @@ describe(FILTERS, () => {
 
 	it("names the lists the workflows filter on", () => {
 		const known = new Set(Object.keys(filters()));
-		for (const name of ["check", "image", "terraform", "stack"]) {
+		for (const name of ["check", "image", "docs", "terraform", "stack"]) {
 			expect(known.has(name), name).toBe(true);
 		}
 		const used = readdirSync(".github/workflows")
@@ -140,6 +140,15 @@ describe(FILTERS, () => {
 		expect(matchesFilter(image, "src/index.ts")).toBe(true);
 	});
 
+	it("builds the docs site for the site and the docs, but not for the app", () => {
+		const docs = filters().docs ?? [];
+		expect(matchesFilter(docs, "docs/.vitepress/config.ts")).toBe(true);
+		expect(matchesFilter(docs, "docs/adr/0001-typescript-ports-and-adapters.md")).toBe(true);
+		expect(matchesFilter(docs, "src/index.ts")).toBe(false);
+		// The site is not in the image.
+		expect(matchesFilter(filters().image ?? [], "docs/.vitepress/config.ts")).toBe(false);
+	});
+
 	it("skips Azure plans for infra markdown but not for Terraform files", () => {
 		const stack = filters().stack ?? [];
 		const terraform = filters().terraform ?? [];
@@ -167,17 +176,17 @@ describe(FILTERS, () => {
 		}
 	});
 
-	it.each([["terraform", "terraform"]] as const)(
-		"%s.yml starts for every positive pattern of `%s`",
-		(workflow, filter) => {
-			const file = `.github/workflows/${workflow}.yml`;
-			if (!existsSync(file)) return;
-			const on = (parse(read(file)) as { on: Record<string, { paths?: string[] } | null> }).on;
-			const wanted = (filters()[filter] ?? []).filter((pattern) => !pattern.startsWith("!"));
-			for (const event of Object.values(on)) {
-				if (!event?.paths) continue;
-				expect([...event.paths].sort()).toEqual([...new Set(wanted)].sort());
-			}
-		},
-	);
+	it.each([
+		["docs", "docs"],
+		["terraform", "terraform"],
+	] as const)("%s.yml starts for every positive pattern of `%s`", (workflow, filter) => {
+		const file = `.github/workflows/${workflow}.yml`;
+		if (!existsSync(file)) return;
+		const on = (parse(read(file)) as { on: Record<string, { paths?: string[] } | null> }).on;
+		const wanted = (filters()[filter] ?? []).filter((pattern) => !pattern.startsWith("!"));
+		for (const event of Object.values(on)) {
+			if (!event?.paths) continue;
+			expect([...event.paths].sort()).toEqual([...new Set(wanted)].sort());
+		}
+	});
 });
