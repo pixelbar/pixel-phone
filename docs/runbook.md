@@ -240,6 +240,16 @@ Config refuses a non-`_dev` helper outside prod, and Terraform pins dev's helper
 4. Set `home_assistant_url` in `infra/envs/dev/terraform.example.tfvars` and `just tf-apply dev`.
 5. Check: `curl -sS -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"entity_id":"input_boolean.pixel_phone_ringing_dev"}' https://<nabu casa url>/api/services/input_boolean/turn_on` flips the helper on. Turn it off the same way.
 
+Each call has three seconds and no retry. A failure is logged as `home-assistant.failed` and sent to Sentry with the tag `area: home-assistant`; the call still reaches Pixel through the queue.
+
+Without `home_assistant_url`, pixel-phone logs `ringer.off` instead of ringing.
+
+| `home-assistant.failed` says | Fix |
+| --- | --- |
+| `401 (is HOME_ASSISTANT_TOKEN valid?)` | The token was revoked or mistyped: make a new one (step 2), push, restart |
+| `400` / `404 (does input_boolean… exist…)` | The helper is missing or renamed (step 1) |
+| `didn't get through (TimeoutError)` | Home Assistant or Nabu Casa is down or slow |
+
 **What the token can do.** Home Assistant can't limit a token to some actions or entities: a non-admin user can still call any action on any entity, but can't change configuration, users or integrations. Not being an administrator is all the narrowing Home Assistant offers ([ADR 0005](adr/0005-home-assistant-owns-the-siren.md)). So the token is a Key Vault secret like the others, and only pixel-phone has it.
 
 **Rotating the token:** log in as `pixel-phone`, create a new token, put it in `.env.<env>`, `just secrets-push <env>`, `just restart <env>`, check with step 5, then delete the old token on the same page. Do this too if someone leaves who had the user's password.
@@ -280,16 +290,6 @@ Written once the hardware exists. Both go in Home Assistant, not here.
 
 - **Siren:** when `input_boolean.pixel_phone_ringing` turns on, sound the siren if Home Assistant's own rules allow (quiet hours, space closed); when it turns off, silence it. Purpose-specific triggers, `mode: restart`. Never on the `_dev` helper.
 - **Button:** on the button's `event.*` entity (`event.received`), or its Zigbee2MQTT device trigger, call `rest_command.pixel_phone_accept` with `response_variable`, and turn the helper off **only if** the status is `202`. On anything else, leave the helper alone: if the accept failed, the call is still ringing and the siren should keep going. pixel-phone turns the helper off itself once the call leaves `ringing`. `mode: single`, so a double press sends one accept. A press with nothing ringing gets `404` and does nothing else.
-
-Each call has three seconds and no retry. A failure is logged as `home-assistant.failed` and sent to Sentry with the tag `area: home-assistant`; the call still reaches Pixel through the queue.
-
-Without `home_assistant_url`, pixel-phone logs `ringer.off` instead of ringing.
-
-| `home-assistant.failed` says | Fix |
-| --- | --- |
-| `401 (is HOME_ASSISTANT_TOKEN valid?)` | The token was revoked or mistyped: make a new one (step 2), push, restart |
-| `400` / `404 (does input_boolean… exist…)` | The helper is missing or renamed (step 1) |
-| `didn't get through (TimeoutError)` | Home Assistant or Nabu Casa is down or slow |
 
 ## When the doorbell doesn't ring
 
