@@ -333,6 +333,14 @@ jobs:
           fi
           previous="$(az containerapp show -g "${RESOURCE_GROUP}" -n "${APP_NAME}" --query "properties.template.containers[0].image" -o tsv)"
           echo "Was running ${previous}"
+          # Only a SHA or version tag is a rollback target. :main moves (publish has
+          # just pointed it at this build), and prod starts on it before its first release.
+          previous_tag="${previous##*:}"
+          if [[ "${previous_tag}" =~ ^([0-9a-f]{40}|v[0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            rollback="To roll back: just rollback prod ${previous_tag}"
+          else
+            rollback="It ran ${previous}, which isn't pinned, so there is no earlier release to roll back to: fix forward, or roll back to a SHA from the releases page."
+          fi
           az containerapp update -g "${RESOURCE_GROUP}" -n "${APP_NAME}" \
             --image "${IMAGE}" --min-replicas 1 --max-replicas 1 --only-show-errors -o none
           fqdn="$(az containerapp show -g "${RESOURCE_GROUP}" -n "${APP_NAME}" --query properties.configuration.ingress.fqdn -o tsv)"
@@ -340,12 +348,12 @@ jobs:
             if curl -fsS --max-time 10 "https://${fqdn}/version" | grep -q "\"${SHA}\""; then
               curl -fsS "https://${fqdn}/version"
               echo
-              echo "::notice::pixel-phone-prod runs ${TAG} (${SHA}). To roll back: just rollback prod ${previous##*:}"
+              echo "::notice::pixel-phone-prod runs ${TAG} (${SHA}). ${rollback}"
               exit 0
             fi
             sleep 5
           done
-          echo "::error::pixel-phone-prod didn't report ${SHA} within 150 s. It was running ${previous}; to roll back: just rollback prod ${previous##*:}"
+          echo "::error::pixel-phone-prod didn't report ${SHA} within 150 s. ${rollback}"
           exit 1
 
   # docs.yml's deploy job uses the github-pages environment, which deploys from main.

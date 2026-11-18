@@ -28,7 +28,7 @@ A release is the only way code reaches prod ([ADR 0011](adr/0011-releases-and-pr
 
 1. Outside opening hours, `just release` (or **Actions → Release → Run workflow** on `main`).
 2. The workflow runs `just check`, cuts `[Unreleased]` into `vX.Y.Z` (`just bump --commit`: Added → minor, Fixed/Changed → patch), pushes the `Release vX.Y.Z` commit and tag, opens a GitHub Release, publishes `ghcr.io/pixelbar/pixel-phone:<sha>`, `:vX.Y.Z` and `:main`, makes the Sentry release (environment `prod`) and publishes the docs site.
-3. **Roll pixel-phone-prod** waits for a reviewer on Environment `prod`. Approve it in the run (**Review deployments**). It runs `az containerapp update` to `:<sha>` and waits until `/version` reports that SHA. Its summary names the image prod ran before, for a rollback.
+3. **Roll pixel-phone-prod** waits for a reviewer on Environment `prod`. Approve it in the run (**Review deployments**). It runs `az containerapp update` to `:<sha>` and waits until `/version` reports that SHA. Its summary names the release to roll back to, if prod ran one before. The first release replaces the unpinned `:main` that Terraform created prod with, so it has nothing to roll back to.
 4. Check: `curl -sS https://phone.pixelbar.nl/version`, and the logs for `process.started`.
 
 If a job fails after the tag exists, **Re-run failed jobs**: it carries on with the same version. "No Unreleased notes" means there is nothing to release. Rejecting the approval leaves prod as it was; the version, image and GitHub Release stay.
@@ -41,7 +41,7 @@ The workflow never applies Terraform. An infra change is `PIXEL_PHONE_APPLY_PROD
 just rollback prod v0.3.0          # or the previous commit SHA
 ```
 
-It checks the app says `PIXEL_PHONE_ENV=prod` and that the image can be pulled, asks you to type `prod`, swaps the image (secrets and Terraform are untouched) and waits for the new revision. The previous release is on the [releases page](https://github.com/pixelbar/pixel-phone/releases), or in the summary of the release that broke things. Without `just`: `az containerapp update -g pixel-phone-prod -n pixel-phone-prod --image ghcr.io/pixelbar/pixel-phone:<previous sha>`.
+It takes only a full commit SHA or a `vX.Y.Z` tag (`:main` and `:dev` move with every publish). It checks the app says `PIXEL_PHONE_ENV=prod` and that the image can be pulled, asks you to type `prod`, swaps the image (secrets and Terraform are untouched) and waits for the new revision. The previous release is on the [releases page](https://github.com/pixelbar/pixel-phone/releases), or in the summary of the release that broke things. Without `just`: `az containerapp update -g pixel-phone-prod -n pixel-phone-prod --image ghcr.io/pixelbar/pixel-phone:<previous sha>`.
 
 A rollback isn't recorded anywhere but Azure: say so in the team chat, and fix forward with a new release. dev is the same with `just rollback dev <sha>`.
 
