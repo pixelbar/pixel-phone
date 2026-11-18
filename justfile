@@ -285,6 +285,10 @@ rollback env tag:
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{env}}" in dev|prod) app="pixel-phone-{{env}}" ;; *) echo "env must be dev or prod" >&2; exit 1 ;; esac
+    # :main and :dev move with every publish, so they can't name what ran before.
+    if ! [[ "{{tag}}" =~ ^([0-9a-f]{40}|v[0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+      echo "Roll back to a full commit SHA or a vX.Y.Z tag, not '{{tag}}': other tags move." >&2; exit 1
+    fi
     image="ghcr.io/pixelbar/pixel-phone:{{tag}}"
     show() { az containerapp show -g "$app" -n "$app" --query "$1" -o tsv; }
     running_env="$(show "properties.template.containers[0].env[?name=='PIXEL_PHONE_ENV'].value | [0]")"
