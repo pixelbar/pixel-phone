@@ -1,24 +1,70 @@
 /**
- * The pure half of `just secrets-pull` / `just secrets-push`: lining local values up
- * with Key Vault, describing the difference without ever showing a value, editing env
- * files, and the `az` arguments. `scripts/secrets-sync.ts` does the reading and writing.
- * Adapted from Pixel's scripts/secrets-sync-lib.ts.
+ * The pure half of `just pull` / `just push` and `just secrets-pull` / `secrets-push`:
+ * lining local values up with Key Vault, describing the difference without ever showing
+ * a secret value, editing env files, checking the shared tfvars, and the `az` arguments.
+ * `scripts/secrets-sync.ts` does the reading and writing. Adapted from Pixel's
+ * scripts/secrets-sync-lib.ts.
  */
+import { join } from "node:path";
 import { parseEnv } from "node:util";
 import { ENVS, type Target } from "./envs.ts";
-import type { SecretEntry } from "./secrets-manifest.ts";
+import type { SecretEntry, SecretsManifest } from "./secrets-manifest.ts";
 
 export type Values = ReadonlyMap<string, string>;
 
-/** Reads the managed secrets out of an env file's text, keyed by Key Vault name. */
+/** The Key Vault secret that holds the stack's terraform.tfvars. */
+export const TFVARS_SECRET = "terraform-tfvars";
+
+/** The stack's settings, shared through `terraform-tfvars`. Gitignored (`*.tfvars`). */
+export function tfvarsFile(target: Target): string {
+	return join("infra", "envs", target, "terraform.tfvars");
+}
+
+/** Where a secret Terraform input would go instead: auto-loaded, gitignored, never synced. */
+export function secretTfvarsFile(target: Target): string {
+	return join("infra", "envs", target, "secrets.auto.tfvars");
+}
+
+/** The local file behind each tooling secret. */
+const FILES: Readonly<Record<string, (target: Target) => string>> = {
+	[TFVARS_SECRET]: tfvarsFile,
+};
+
+/** Whether a secret is a whole local file (shown as a diff) rather than one env variable. */
+export function isFile(entry: SecretEntry): boolean {
+	return entry.group === "tooling";
+}
+
+export function localFile(entry: SecretEntry, target: Target): string {
+	const file = FILES[entry.vault];
+	if (!file) throw new Error(`${entry.vault} has no local file`); // syncedSecrets skips those
+	return file(target);
+}
+
+/**
+ * What the sync manages. `secrets` is the manifest's `app` group (`just secrets-pull`);
+ * `all` adds the `tooling` group, which is the stack's tfvars (`just pull`).
+ */
+export function syncedSecrets(
+	manifest: SecretsManifest,
+	scope: "secrets" | "all" = "secrets",
+): SecretEntry[] {
+	return manifest.secrets.filter((s) => s.group === "app" || (scope === "all" && s.vault in FILES));
+}
+
+/**
+ * Reads the managed secrets out of an env file's text and each file secret's text,
+ * keyed by Key Vault name. Missing or empty means not set.
+ */
 export function localValues(
 	entries: readonly SecretEntry[],
 	envText: string | undefined,
+	files: ReadonlyMap<string, string | undefined> = new Map(),
 ): Map<string, string> {
 	const env = envText === undefined ? {} : parseEnv(envText);
 	const out = new Map<string, string>();
 	for (const entry of entries) {
-		const value = env[entry.env];
+		const value = entry.group === "app" ? env[entry.env] : files.get(entry.vault);
 		if (value !== undefined && value !== "") out.set(entry.vault, value);
 	}
 	return out;
@@ -68,8 +114,8 @@ const chars = (value: string | undefined) =>
  * One line per secret, never the value. `push` reads left to right as local → Key
  * Vault, `pull` as Key Vault → local.
  */
-export function describe(row: Row, direction: "push" | "pull"): string {
-	const name = `${row.entry.vault} (${row.entry.env})`;
+export function describe(row: Row, direction: "push" | "pull", target: Target): string {
+	const name = `${row.entry.vault} (${row.entry.group === "app" ? row.entry.env : localFile(row.entry, target)})`;
 	const [from, to] = direction === "push" ? [row.local, row.remote] : [row.remote, row.local];
 	switch (row.status) {
 		case "same":
@@ -171,7 +217,11 @@ export function azShowArgs(target: Target, name: string): string[] {
 }
 
 /** Sets a secret from a file, so the value never appears in a command line. */
-export function azSetArgs(target: Target, entry: SecretEntry, file: string): string[] {
+export function azSetArgs(
+	target: Target,
+	entry: Pick<SecretEntry, "vault">,
+	file: string,
+): string[] {
 	return [
 		"keyvault",
 		"secret",
@@ -202,4 +252,57 @@ export function parseShown(stdout: string): string {
 	const value: unknown = JSON.parse(stdout);
 	if (typeof value !== "string") throw new Error("az returned a secret that isn't text");
 	return value;
+}
+
+/** Top-level `name =` keys in a tfvars file. */
+export function tfvarsKeys(text: string): string[] {
+	return [...text.matchAll(/^([a-z_][a-z0-9_]*)\s*=/gm)].map(([, key]) => key ?? "");
+}
+
+export type StackVariables = { all: ReadonlySet<string>; sensitive: ReadonlySet<string> };
+
+/** Variables a stack's variables.tf declares, and which of them are sensitive (secret inputs). */
+export function stackVariables(variablesTf: string): StackVariables {
+	const all = new Set<string>();
+	const sensitive = new Set<string>();
+	for (const [, name, body] of variablesTf.matchAll(/^variable "([a-z0-9_]+)" \{([\s\S]*?)^\}/gm)) {
+		if (!name) continue;
+		all.add(name);
+		if (/^\s*sensitive\s*=\s*true/m.test(body ?? "")) sensitive.add(name);
+	}
+	return { all, sensitive };
+}
+
+/**
+ * A tfvars file as it may be shown: the value of every sensitive variable is hidden,
+ * commented-out ones included, so a diff never prints a secret even when the file
+ * (wrongly) holds one.
+ */
+export function redactTfvars(text: string, sensitive: ReadonlySet<string>): string {
+	return text.replace(
+		/^(\s*#?\s*)([a-z_][a-z0-9_]*)(\s*=\s*)(.*)$/gm,
+		(line, lead: string, key: string, eq: string) =>
+			sensitive.has(key) ? `${lead}${key}${eq}(secret, hidden)` : line,
+	);
+}
+
+/**
+ * What's wrong with a tfvars file before it's shared: it may only set variables this
+ * env's stack declares (prod's `custom_domains` in dev's file shows it's the wrong
+ * one), and never a secret, which belongs in `secrets.auto.tfvars` and never leaves the
+ * laptop. Problems name keys, never values.
+ */
+export function tfvarsProblems(text: string, target: Target, variables: StackVariables): string[] {
+	const problems: string[] = [];
+	const file = tfvarsFile(target);
+	for (const key of tfvarsKeys(text)) {
+		if (variables.sensitive.has(key)) {
+			problems.push(
+				`${file} sets ${key}, which is a secret. Move it to ${secretTfvarsFile(target)}.`,
+			);
+		} else if (!variables.all.has(key)) {
+			problems.push(`${file} sets ${key}, which infra/envs/${target} doesn't declare.`);
+		}
+	}
+	return problems;
 }

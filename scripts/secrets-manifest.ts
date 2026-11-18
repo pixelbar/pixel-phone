@@ -1,7 +1,12 @@
 /**
  * Loads and validates `infra/secrets.manifest.yaml`: the secrets pixel-phone keeps in
  * Azure Key Vault. Names and metadata only; values never pass through here.
- * Used by `just validate-secrets` and `just secrets-pull` / `secrets-push`.
+ * Used by `just validate-secrets`, `just secrets-pull` / `secrets-push` and
+ * `just pull` / `push`.
+ *
+ * Two groups, as in Pixel: `app` secrets reach the Container App as environment
+ * variables; `tooling` secrets are files only the laptop tools read (the stack's
+ * terraform.tfvars). Terraform skips the tooling group.
  */
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
@@ -21,12 +26,21 @@ const featureName = z.string().regex(/^[a-z][a-z0-9-]*$/, {
 });
 const description = z.string().trim().min(1).max(200);
 
-const entrySchema = z.strictObject({
+const appEntry = z.strictObject({
 	vault: vaultName,
+	group: z.literal("app"),
 	env: envName,
 	feature: featureName,
 	description,
 });
+
+const toolingEntry = z.strictObject({
+	vault: vaultName,
+	group: z.literal("tooling"),
+	description,
+});
+
+const entrySchema = z.discriminatedUnion("group", [appEntry, toolingEntry]);
 
 const manifestSchema = z.strictObject({
 	version: z.literal(1),
@@ -34,7 +48,9 @@ const manifestSchema = z.strictObject({
 	secrets: z.array(entrySchema).min(1),
 });
 
-export type SecretEntry = z.infer<typeof entrySchema>;
+export type AppSecret = z.infer<typeof appEntry>;
+export type ToolingSecret = z.infer<typeof toolingEntry>;
+export type SecretEntry = AppSecret | ToolingSecret;
 export type SecretsManifest = {
 	features: Readonly<Record<string, string>>;
 	secrets: readonly SecretEntry[];
@@ -73,6 +89,7 @@ export function parseSecretsManifest(source: string, file = MANIFEST_FILE): Secr
 		const label = `"${secret.vault}"`;
 		if (vaults.has(secret.vault)) problems.push(`${label} is listed twice`);
 		vaults.add(secret.vault);
+		if (secret.group !== "app") continue;
 		if (envs.has(secret.env)) problems.push(`${label} reuses the env ${secret.env}`);
 		envs.add(secret.env);
 		if (!(secret.feature in features)) {
@@ -101,4 +118,9 @@ export function loadSecretsManifest(file = MANIFEST_FILE): SecretsManifest {
 		throw new SecretsManifestError(`cannot read ${file} (${code})`);
 	}
 	return parseSecretsManifest(source, file);
+}
+
+/** The secrets the Container App reads: the ones Terraform references. */
+export function appSecrets(manifest: SecretsManifest): AppSecret[] {
+	return manifest.secrets.filter((s): s is AppSecret => s.group === "app");
 }

@@ -1,5 +1,6 @@
-# The settings prod is applied with. None of these are secrets; `just tf-plan prod`
-# plans with this file. Copy to terraform.tfvars (gitignored) only to override something.
+# A starting point for prod's settings. prod is applied with terraform.tfvars
+# (gitignored), shared through Key Vault: `just pull prod`, edit, `just push prod`
+# (docs/runbook.md#terraform-settings). None of these are secrets.
 
 pixel_principal_id = "69f18339-4484-400e-bb3e-e51164182d72" # Pixel prod's app identity
 

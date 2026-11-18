@@ -4,7 +4,8 @@ import { loadSecretsManifest, SecretsManifestError } from "./secrets-manifest.ts
 try {
 	const { secrets, features } = loadSecretsManifest();
 	for (const s of secrets) {
-		process.stdout.write(`${s.vault.padEnd(22)} ${s.env.padEnd(22)} ${s.feature}\n`);
+		const [env, feature] = s.group === "app" ? [s.env, s.feature] : ["(file)", "tooling"];
+		process.stdout.write(`${s.vault.padEnd(22)} ${env.padEnd(22)} ${feature}\n`);
 	}
 	process.stdout.write(`${secrets.length} secrets, ${Object.keys(features).length} features.\n`);
 } catch (error) {

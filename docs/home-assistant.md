@@ -5,7 +5,7 @@ Home Assistant owns the siren ([ADR 0005](adr/0005-home-assistant-owns-the-siren
 | | dev | prod |
 | --- | --- | --- |
 | Helper | `input_boolean.pixel_phone_ringing_dev` "Pixel Phone ringing (dev)" (nothing is attached to it) | `input_boolean.pixel_phone_ringing` "Pixel Phone ringing" |
-| URL | the Nabu Casa URL, `home_assistant_url` in `infra/envs/<env>/terraform.example.tfvars` | same |
+| URL | the Nabu Casa URL, `home_assistant_url` in `infra/envs/<env>/terraform.tfvars` (`just pull <env>`) | same |
 | Accept action | `rest_command.pixel_phone_accept_dev` | `rest_command.pixel_phone_accept`, to `https://phone.pixelbar.nl` |
 | Accept key in HA | `pixel_phone_dev_accept_authorization` in `secrets.yaml` | `pixel_phone_accept_authorization` |
 | HA user | `pixel-phone`, not an administrator, one token per environment | same user |
@@ -27,7 +27,7 @@ Config refuses a non-`_dev` helper outside prod, and Terraform pins dev's helper
 1. The helper exists (see the table above). If it is ever missing: **Settings → Devices & services → Helpers → Create helper → Toggle**, named `Pixel Phone ringing (dev)` (its ID becomes `input_boolean.pixel_phone_ringing_dev`).
 2. **Settings → People → Users → Add user** `pixel-phone`, **not** an administrator, "Can only log in from the local network" off. Log in as it once in a private window, then **Profile → Security → Long-lived access tokens → Create token**, named after the environment (`pixel-phone dev`).
 3. Put the token in `.env.dev` as `HOME_ASSISTANT_TOKEN`, then `just secrets-push dev`.
-4. Set `home_assistant_url` in `infra/envs/dev/terraform.example.tfvars` and `just tf-apply dev`.
+4. Set `home_assistant_url` in `infra/envs/dev/terraform.tfvars`, `just push dev` and `just tf-apply dev`.
 5. Check: `curl -sS -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"entity_id":"input_boolean.pixel_phone_ringing_dev"}' https://<nabu casa url>/api/services/input_boolean/turn_on` flips the helper on. Turn it off the same way.
 
 Each call has three seconds and no retry. A failure is logged as `home-assistant.failed` and sent to Sentry with the tag `area: home-assistant`; the call still reaches Pixel through the queue.

@@ -1,28 +1,43 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import type { SecretEntry } from "../../scripts/secrets-manifest.ts";
+import { TARGETS } from "../../scripts/envs.ts";
+import {
+	type AppSecret,
+	loadSecretsManifest,
+	type ToolingSecret,
+} from "../../scripts/secrets-manifest.ts";
 import {
 	azSetArgs,
 	azShowArgs,
 	compare,
 	describe as describeRow,
 	envValue,
+	isFile,
 	isNotFound,
+	localFile,
 	localValues,
 	newEnvFile,
 	parseShown,
 	phoneEnvOf,
+	redactTfvars,
 	setEnvValues,
+	stackVariables,
+	syncedSecrets,
+	tfvarsKeys,
+	tfvarsProblems,
 	toPull,
 	toPush,
 	wrongEnvFile,
 } from "../../scripts/secrets-sync-lib.ts";
 
-const entry = (vault: string, env: string): SecretEntry => ({
+const entry = (vault: string, env: string): AppSecret => ({
 	vault,
+	group: "app",
 	env,
 	feature: "telnyx",
 	description: "test",
 });
+const TFVARS: ToolingSecret = { vault: "terraform-tfvars", group: "tooling", description: "test" };
 const KEY = entry("telnyx-api-key", "TELNYX_API_KEY");
 const PUB = entry("telnyx-public-key", "TELNYX_PUBLIC_KEY");
 const DSN = entry("sentry-dsn", "SENTRY_DSN");
@@ -34,6 +49,33 @@ describe("localValues", () => {
 		const values = localValues([KEY, PUB, DSN], `TELNYX_API_KEY=${SECRET}\nSENTRY_DSN=\nOTHER=x\n`);
 		expect([...values]).toEqual([["telnyx-api-key", SECRET]]);
 		expect(localValues([KEY], undefined).size).toBe(0);
+	});
+
+	it("reads a file secret from its file's text, and an empty or missing file as unset", () => {
+		const tfvars = "telnyx_enabled = true\n";
+		expect([...localValues([KEY, TFVARS], "", new Map([["terraform-tfvars", tfvars]]))]).toEqual([
+			["terraform-tfvars", tfvars],
+		]);
+		expect(localValues([TFVARS], "", new Map([["terraform-tfvars", ""]])).size).toBe(0);
+		expect(localValues([TFVARS], "").size).toBe(0);
+	});
+});
+
+describe("syncedSecrets", () => {
+	const manifest = loadSecretsManifest();
+
+	it("syncs the app group for secrets-pull, and adds the tfvars for just pull", () => {
+		const secrets = syncedSecrets(manifest).map((s) => s.vault);
+		const all = syncedSecrets(manifest, "all").map((s) => s.vault);
+		expect(secrets).not.toContain("terraform-tfvars");
+		expect(all).toEqual([...secrets, "terraform-tfvars"]);
+	});
+
+	it("keeps the tfvars in the env's stack folder", () => {
+		expect(isFile(TFVARS)).toBe(true);
+		expect(isFile(KEY)).toBe(false);
+		expect(localFile(TFVARS, "prod")).toBe("infra/envs/prod/terraform.tfvars");
+		expect(() => localFile({ ...TFVARS, vault: "unknown" }, "dev")).toThrow(/no local file/);
 	});
 });
 
@@ -66,8 +108,8 @@ describe("compare, toPush, toPull and describe", () => {
 	});
 
 	it("describes each row without its value", () => {
-		const push = rows.map((r) => describeRow(r, "push"));
-		const pull = rows.map((r) => describeRow(r, "pull"));
+		const push = rows.map((r) => describeRow(r, "push", "dev"));
+		const pull = rows.map((r) => describeRow(r, "pull", "dev"));
 		for (const line of [...push, ...pull]) {
 			for (const value of ["v-same-1", "v-loc", "v-remote", "v-only-here", "v-only-there"]) {
 				expect(line).not.toContain(value);
@@ -80,12 +122,15 @@ describe("compare, toPush, toPull and describe", () => {
 		expect(push[3]).toContain("a push never deletes");
 		expect(pull[2]).toContain("only local");
 		expect(pull[3]).toContain("new locally (12 characters)");
-		expect(describeRow(compare([KEY], new Map(), new Map())[0] as never, "push")).toContain(
+		expect(describeRow(compare([KEY], new Map(), new Map())[0] as never, "push", "dev")).toContain(
 			"not set either side",
 		);
 		expect(push[0]).toContain("the same");
-		expect(describeRow({ entry: KEY, status: "local-only", local: "x" }, "push")).toContain(
+		expect(describeRow({ entry: KEY, status: "local-only", local: "x" }, "push", "dev")).toContain(
 			"1 character)",
+		);
+		expect(describeRow({ entry: TFVARS, status: "neither" }, "pull", "prod")).toBe(
+			"  - terraform-tfvars (infra/envs/prod/terraform.tfvars): not set either side",
 		);
 	});
 });
@@ -144,5 +189,67 @@ describe("az", () => {
 		expect(isNotFound("Forbidden")).toBe(false);
 		expect(parseShown('"abc"\n')).toBe("abc");
 		expect(() => parseShown("42")).toThrow(/isn't text/);
+	});
+});
+
+describe("tfvars", () => {
+	const variables = stackVariables(`
+variable "telnyx_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "registry_password" {
+  type      = string
+  sensitive = true
+}
+`);
+
+	it("reads a stack's variables and which are sensitive", () => {
+		expect([...variables.all]).toEqual(["telnyx_enabled", "registry_password"]);
+		expect([...variables.sensitive]).toEqual(["registry_password"]);
+	});
+
+	it("lists top-level keys, not commented-out ones or map entries", () => {
+		const text = `telnyx_enabled = true\n# sentry_enabled = true\nmaintainers = {\n  someone = "id"\n}\n`;
+		expect(tfvarsKeys(text)).toEqual(["telnyx_enabled", "maintainers"]);
+	});
+
+	it("hides a sensitive value, commented out or not, and leaves the rest", () => {
+		const text = `telnyx_enabled = true\nregistry_password = "${SECRET}"\n# registry_password = "${SECRET}"\n`;
+		const redacted = redactTfvars(text, variables.sensitive);
+		expect(redacted).not.toContain(SECRET);
+		expect(redacted).toContain("telnyx_enabled = true");
+		expect(redacted).toContain("# registry_password = (secret, hidden)");
+	});
+
+	it("refuses a secret or an undeclared variable, naming the key but never the value", () => {
+		const problems = tfvarsProblems(
+			`telnyx_enabled = true\nregistry_password = "${SECRET}"\ncustom_domains = []\n`,
+			"dev",
+			variables,
+		);
+		expect(problems).toHaveLength(2);
+		expect(problems[0]).toMatch(/registry_password, which is a secret.*secrets\.auto\.tfvars/);
+		expect(problems[1]).toMatch(/custom_domains, which infra\/envs\/dev doesn't declare/);
+		for (const problem of problems) expect(problem).not.toContain(SECRET);
+		expect(tfvarsProblems("telnyx_enabled = true\n", "dev", variables)).toEqual([]);
+	});
+
+	it.each(TARGETS)("accepts %s's committed example, so copying it is a valid start", (target) => {
+		const read = (file: string) => readFileSync(`infra/envs/${target}/${file}`, "utf8");
+		expect(
+			tfvarsProblems(
+				read("terraform.example.tfvars"),
+				target,
+				stackVariables(read("variables.tf")),
+			),
+		).toEqual([]);
+	});
+
+	it("tells dev's file from prod's: prod's custom_domains isn't a dev variable", () => {
+		const prodExample = readFileSync("infra/envs/prod/terraform.example.tfvars", "utf8");
+		const devVariables = stackVariables(readFileSync("infra/envs/dev/variables.tf", "utf8"));
+		expect(tfvarsProblems(prodExample, "dev", devVariables).join("\n")).toMatch(/custom_domains/);
 	});
 });

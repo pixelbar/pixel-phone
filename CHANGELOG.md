@@ -34,6 +34,7 @@ Until 1.0.0, releases stay on 0.x: `Added` bumps minor, `Fixed`/`Changed` (and t
 
 ### Changed
 
+- Each environment's Terraform settings now live in a gitignored `infra/envs/<env>/terraform.tfvars`, shared through the Key Vault secret `terraform-tfvars` as in Pixel (ADR 0012). `just pull <env>` brings it and the app secrets down. `just push <env>` sends them back, showing the tfvars diff, and refuses secrets and undeclared variables. `just tf-plan` and `just tf-apply` now read `terraform.tfvars` instead of the committed example. Run `just pull <env>` before you plan.
 - `just deploy dev` and **Deploy dev** keep the one warm replica instead of setting the minimum back to zero on every deploy (#16).
 - pixel-phone now keeps one replica running at all times instead of scaling to zero. Starting from zero took about 25 seconds, longer than the 15 seconds anyone has to answer the doorbell (#29).
 

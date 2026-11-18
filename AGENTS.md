@@ -29,6 +29,7 @@ just simulate-call    # a whole call against fakes; --help for the scenarios
 just check            # lint + typecheck + tests with coverage thresholds; must pass before you call a change done
 just test             # tests only
 just fmt              # auto-format (Biome, and Terraform if `terraform` is on PATH)
+just pull <env>       # an env's terraform.tfvars and app secrets from Key Vault (maintainers; needs az login)
 just check-changelog  # fail if this branch does not change CHANGELOG.md vs origin/main
 just changelog-merge  # in a stopped merge/rebase: keep both sides' CHANGELOG [Unreleased] entries when safe
 just bump             # cut [Unreleased] into a dated version and bump package.json
@@ -70,4 +71,5 @@ CHANGELOG.md        # Keep a Changelog 1.1.0; most PRs add an Unreleased entry
 - Webhooks from Telnyx are accepted only with a valid Ed25519 signature over the raw body, within the replay window.
 - The accept API answers a call, so it needs a bearer API key, compared in constant time. Changes to `src/http/auth*`, the webhook signature check, or the accept route need tests and a human reviewer. Call that out in the PR description.
 - Secrets live in Key Vault, listed in `infra/secrets.manifest.yaml`. Never put a secret in the image, in Terraform state, in a test fixture that looks real, or in a log.
+- Each env's Terraform settings are in a gitignored `terraform.tfvars`, shared through Key Vault (`just pull` / `just push`, [ADR 0012](docs/adr/0012-tfvars-in-key-vault.md)). It holds settings, never secrets. Coding agents don't run `just push`.
 - `dev` never touches the real siren: it flips `input_boolean.pixel_phone_ringing_dev`, which nothing is attached to.

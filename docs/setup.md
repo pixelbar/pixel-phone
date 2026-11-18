@@ -60,8 +60,8 @@ Resource groups, Terraform state and GitHub's Azure identities. Follow [`infra/b
 
 dev has its own Telnyx number and never touches the real siren: it flips `input_boolean.pixel_phone_ringing_dev`, which nothing is attached to.
 
-1. **Maintainers.** Add your Entra ID object ID (`az ad user show --id <you>@pixelbar.nl --query id -o tsv`) to `maintainer_principal_ids` in `infra/envs/dev/terraform.example.tfvars`. It gives you the Key Vault and recordings roles.
-2. **The stack.** `just tf-plan dev`, then `just tf-apply dev`. Every feature is off.
+1. **Settings and maintainers.** Copy `infra/envs/dev/terraform.example.tfvars` to `infra/envs/dev/terraform.tfvars` (gitignored) and add your Entra ID object ID (`az ad user show --id <you>@pixelbar.nl --query id -o tsv`) to `maintainer_principal_ids`. It gives you the Key Vault and recordings roles. Turn every feature off for now.
+2. **The stack.** `just tf-plan dev`, then `just tf-apply dev`. Then `just push dev` shares the tfvars through the new Key Vault ([Terraform settings](runbook.md#terraform-settings)); from now on everyone starts with `just pull dev`.
 3. **The app.** `just deploy dev` (or **Actions → Deploy dev**). Check: `curl https://<dev fqdn>/version` shows the commit.
 4. **Secrets.** Copy `.env.example` to `.env.dev`, set `PIXEL_PHONE_ENV=dev`, and fill in:
    - `TELNYX_API_KEY`: Telnyx portal → **Keys & Credentials → API Keys → Create**, a key only for dev.
@@ -70,10 +70,10 @@ dev has its own Telnyx number and never touches the real siren: it flips `input_
    - `API_KEYS_YAML`: `just api-key home-assistant` and `just api-key pixel`, both lines.
 
    Then `just secrets-push dev`.
-5. **Features.** In `infra/envs/dev/terraform.example.tfvars`: `telnyx_enabled`, `accept_api_enabled` and `sentry_enabled = true`. `just tf-apply dev`.
+5. **Features.** In `infra/envs/dev/terraform.tfvars`: `telnyx_enabled`, `accept_api_enabled` and `sentry_enabled = true`. `just push dev`, then `just tf-apply dev`.
 6. **The recording.** `just media push dev media/placeholder-accepted.wav --name accepted.wav` (and `recording_accepted = "accepted.wav"` in the tfvars).
 7. **A number.** Telnyx asks for a working webhook URL when you order a number, so order it now. Add it to `config/telnyx.dev.yaml`, then `just telnyx-sync dev`. Check: `just telnyx-sync dev --check`.
-8. **Home Assistant.** [Connecting an environment](home-assistant.md#connecting-an-environment) for dev: the `_dev` helper, the `pixel-phone` user's dev token (`HOME_ASSISTANT_TOKEN`, pushed), `home_assistant_url` in the tfvars, then apply. Then [the button's](home-assistant.md#the-button) `rest_command.pixel_phone_accept_dev` with the `home-assistant` key.
+8. **Home Assistant.** [Connecting an environment](home-assistant.md#connecting-an-environment) for dev: the `_dev` helper, the `pixel-phone` user's dev token (`HOME_ASSISTANT_TOKEN`, pushed), `home_assistant_url` in the tfvars, push, then apply. Then [the button's](home-assistant.md#the-button) `rest_command.pixel_phone_accept_dev` with the `home-assistant` key.
 9. **Pixel dev.** Give Pixel dev the `queue_url` output (`terraform -chdir=infra/envs/dev output queue_url`) as `PIXEL_PHONE_QUEUE_URL`, and the `pixel` key. Pixel dev's identity is already in `pixel_principal_id`.
 
 **Check:** [Testing a real call on dev](runbook.md#testing-a-real-call-on-dev): a missed call, an accepted call, a busy call. The `_dev` helper flips and Discord shows the call.
@@ -84,11 +84,11 @@ The same, with `prod`, new values for every secret, and `phone.pixelbar.nl`. Nev
 
 | | How | Check |
 | --- | --- | --- |
-| 1. Maintainers | Your object ID in `maintainer_principal_ids` in `infra/envs/prod/terraform.example.tfvars` | |
-| 2. The stack | `just tf-plan prod`, then `PIXEL_PHONE_APPLY_PROD=1 just tf-apply prod`. Every feature is off; the app runs `:main` | `curl https://<fqdn output>/healthz` answers 200 |
+| 1. Settings and maintainers | Copy `infra/envs/prod/terraform.example.tfvars` to `terraform.tfvars`, with your object ID in `maintainer_principal_ids` | |
+| 2. The stack | `just tf-plan prod`, then `PIXEL_PHONE_APPLY_PROD=1 just tf-apply prod`. Every feature is off; the app runs `:main`. Then `just push prod` shares the tfvars | `curl https://<fqdn output>/healthz` answers 200 |
 | 3. `phone.pixelbar.nl` | Make the `CNAME` and `asuid` `TXT` records from the outputs, wait for them, set `custom_domains = ["phone.pixelbar.nl"]` and apply again ([`infra/envs/prod/README.md`](https://github.com/pixelbar/pixel-phone/blob/main/infra/envs/prod/README.md)) | `curl https://phone.pixelbar.nl/healthz` answers 200, certificate valid |
 | 4. Secrets | `.env.prod` with `PIXEL_PHONE_ENV=prod` and **new** values: a prod Telnyx API key, the account's public key, a `pixel-phone prod` Home Assistant token, new `just api-key home-assistant` and `just api-key pixel` keys, the Sentry DSN. `just secrets-push prod` | `az keyvault secret list --vault-name pixel-phone-prod-kv --query "[].name" -o tsv` lists them |
-| 5. Features | In `infra/envs/prod/terraform.example.tfvars`: `telnyx_enabled`, `accept_api_enabled`, `sentry_enabled = true`, `home_assistant_url`. Plan, then apply | `az containerapp show -g pixel-phone-prod -n pixel-phone-prod --query "properties.template.containers[0].env[].name"` lists them |
+| 5. Features | In `infra/envs/prod/terraform.tfvars`: `telnyx_enabled`, `accept_api_enabled`, `sentry_enabled = true`, `home_assistant_url`. `just push prod`, plan, then apply | `az containerapp show -g pixel-phone-prod -n pixel-phone-prod --query "properties.template.containers[0].env[].name"` lists them |
 | 6. The recording | `just media push prod <file> --name accepted.mp3`: the real one, not the dev placeholder | `just media list prod`; no `media.failed` at startup |
 | 7. The first release | `just release`, then approve **prod** in the run ([Releasing](runbook.md#releasing)) | `curl https://phone.pixelbar.nl/version` shows the release's SHA |
 | 8. Telnyx | `just telnyx-sync prod` makes the `pixel-phone-prod` application with webhooks to `phone.pixelbar.nl`. Optionally set `failover_host` in `config/telnyx.prod.yaml` to the `fqdn` output, so calls still arrive if `phone.pixelbar.nl`'s DNS breaks | `just telnyx-sync prod --check` |
@@ -100,4 +100,5 @@ The same, with `prod`, new values for every secret, and `phone.pixelbar.nl`. Nev
 
 - **Releasing, rolling back, rotating secrets** and **when the doorbell doesn't ring:** the [runbook](runbook.md).
 - **Changing infrastructure:** edit `infra/`, `just tf-plan <env>`, then apply from a laptop. CI validates every stack and plans dev; it never applies.
-- **Tearing dev down:** `terraform -chdir=infra/envs/dev destroy -var-file=terraform.example.tfvars` (after `just tf-plan dev` has initialised it). Its Key Vault is purged; prod's has purge protection and can't be.
+- **Changing a setting:** `just pull <env>`, edit `infra/envs/<env>/terraform.tfvars`, `just push <env>`, then plan and apply ([Terraform settings](runbook.md#terraform-settings)).
+- **Tearing dev down:** `just pull dev`, then `terraform -chdir=infra/envs/dev destroy` (after `just tf-plan dev` has initialised it). Its Key Vault is purged; prod's has purge protection and can't be.

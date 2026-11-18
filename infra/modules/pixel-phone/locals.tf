@@ -32,8 +32,11 @@ locals {
     sentry         = var.sentry_enabled
   }
 
+  # The tooling group (the shared terraform.tfvars) is for the laptop tools only.
+  app_secrets = [for s in local.secrets_manifest.secrets : s if s.group == "app"]
+
   enabled_secrets = [
-    for s in local.secrets_manifest.secrets : s if local.secret_features[s.feature]
+    for s in local.app_secrets : s if local.secret_features[s.feature]
   ]
 
   # URIs only. Terraform never reads or writes the values.
