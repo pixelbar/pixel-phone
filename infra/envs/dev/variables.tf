@@ -4,6 +4,12 @@ variable "subscription_id" {
   default     = "d150e252-e2f0-47fb-8a4a-c3f29e9aebd4"
 }
 
+variable "recording_accepted" {
+  type        = string
+  description = "The accept recording's blob name in dev's media container."
+  default     = "accepted.mp3"
+}
+
 variable "container_image" {
   type        = string
   description = "Seeds the first create only; deploys own the image afterwards (just deploy dev, Deploy dev)."

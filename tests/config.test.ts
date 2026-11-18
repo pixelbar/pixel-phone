@@ -25,6 +25,8 @@ describe("loadConfig", () => {
 			port: 3000,
 			logLevel: "info",
 			version: "dev",
+			acceptWindowSeconds: 15,
+			recordingAccepted: "accepted.mp3",
 			azure: { eventsQueue: "phone-events", mediaContainer: "media" },
 		});
 	});
@@ -39,7 +41,7 @@ describe("loadConfig", () => {
 			TELNYX_API_KEY: FAKE_KEY,
 			TELNYX_PUBLIC_KEY: "fake-public-key",
 			...HA,
-			API_KEYS_YAML: "- { id: pixel, key: fake }",
+			API_KEYS_YAML: `- { id: pixel, key: ${"k".repeat(32)} }`,
 			SENTRY_DSN: "https://public@example.invalid/1",
 			AZURE_CLIENT_ID: "client",
 			AZURE_STORAGE_ACCOUNT_NAME: "pixelphonedevst",
@@ -52,7 +54,7 @@ describe("loadConfig", () => {
 			gitSha: "abc123",
 			telnyx: { apiKey: FAKE_KEY, publicKey: "fake-public-key" },
 			homeAssistant: { ringingEntity: "input_boolean.pixel_phone_ringing_dev" },
-			apiKeysYaml: "- { id: pixel, key: fake }",
+			apiKeys: [{ id: "pixel", key: "k".repeat(32) }],
 			sentry: { environment: "dev", release: "abc123", tracesSampleRate: 0.2 },
 			azure: { clientId: "client", storageAccount: "pixelphonedevst" },
 		});
@@ -84,18 +86,53 @@ describe("loadConfig", () => {
 	it("accepts the ringing entity on its own, as Terraform sets it on dev before Home Assistant is", () => {
 		const config = loadConfig({
 			PIXEL_PHONE_ENV: "dev",
+			AZURE_STORAGE_ACCOUNT_NAME: "pixelphonedevst",
 			HOME_ASSISTANT_RINGING_ENTITY: HA.HOME_ASSISTANT_RINGING_ENTITY,
 		});
 		expect(config.homeAssistant).toBeUndefined();
+	});
+
+	it("refuses a bad API_KEYS_YAML without echoing it", () => {
+		const message = problem({ API_KEYS_YAML: "- { id: pixel, key: tooshort }" });
+		expect(message).toMatch(/at least 32/);
+		expect(message).not.toContain("tooshort");
+	});
+
+	it("allows a local Telnyx API URL, and only locally", () => {
+		const telnyx = {
+			TELNYX_API_KEY: FAKE_KEY,
+			TELNYX_PUBLIC_KEY: "k",
+			TELNYX_API_URL: "http://127.0.0.1:4010",
+		};
+		expect(loadConfig(telnyx).telnyx?.apiUrl).toBe("http://127.0.0.1:4010");
+		expect(problem({ ...telnyx, PIXEL_PHONE_ENV: "dev", AZURE_STORAGE_ACCOUNT_NAME: "x" })).toMatch(
+			/TELNYX_API_URL is for local runs only/,
+		);
+	});
+
+	it("needs a storage account outside local, and Azurite only locally", () => {
+		expect(problem({ PIXEL_PHONE_ENV: "dev" })).toMatch(/AZURE_STORAGE_ACCOUNT_NAME must be set/);
+		expect(
+			problem({
+				PIXEL_PHONE_ENV: "prod",
+				AZURE_STORAGE_ACCOUNT_NAME: "x",
+				AZURE_STORAGE_CONNECTION_STRING: "UseDevelopmentStorage=true",
+			}),
+		).toMatch(/local runs only/);
+		expect(
+			loadConfig({ AZURE_STORAGE_CONNECTION_STRING: "UseDevelopmentStorage=true" }).azure
+				.storageConnectionString,
+		).toBe("UseDevelopmentStorage=true");
 	});
 
 	it("keeps dev and local off the real siren", () => {
 		const real = { ...HA, HOME_ASSISTANT_RINGING_ENTITY: "input_boolean.pixel_phone_ringing" };
 		expect(problem({ ...real, PIXEL_PHONE_ENV: "dev" })).toMatch(/_dev helper/);
 		expect(problem(real)).toMatch(/_dev helper/);
-		expect(loadConfig({ ...real, PIXEL_PHONE_ENV: "prod" }).homeAssistant?.ringingEntity).toBe(
-			"input_boolean.pixel_phone_ringing",
-		);
+		expect(
+			loadConfig({ ...real, PIXEL_PHONE_ENV: "prod", AZURE_STORAGE_ACCOUNT_NAME: "x" })
+				.homeAssistant?.ringingEntity,
+		).toBe("input_boolean.pixel_phone_ringing");
 		expect(problem({ ...HA, HOME_ASSISTANT_RINGING_ENTITY: "light.siren" })).toMatch(
 			/input_boolean/,
 		);

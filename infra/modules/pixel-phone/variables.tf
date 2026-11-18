@@ -63,6 +63,12 @@ variable "purge_protection_enabled" {
   default     = false
 }
 
+variable "recording_accepted" {
+  type        = string
+  description = "RECORDING_ACCEPTED: the accept recording's blob in the media container (just media push)."
+  default     = "accepted.mp3"
+}
+
 variable "extra_env" {
   type        = map(string)
   description = "Plain (non-secret) environment variables for the container, on top of the ones the module sets."

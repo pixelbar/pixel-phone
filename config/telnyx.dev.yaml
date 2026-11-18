@@ -1,0 +1,8 @@
+# What `just telnyx-sync dev` makes the Telnyx side look like (ADR 0007).
+# Numbers are not secret. The webhook host is the Container App's hostname unless
+# `host` is set here.
+
+# Created by hand in the portal on 2026-11-17, before the sync existed.
+application: Pixel Phone
+numbers:
+  - "+31103024128"

@@ -1,0 +1,239 @@
+{
+	"$id": "https://github.com/pixelbar/pixel-phone/blob/main/docs/events.schema.json",
+	"title": "pixel-phone call event (v1)",
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"oneOf": [
+		{
+			"type": "object",
+			"properties": {
+				"version": {
+					"type": "number",
+					"const": 1
+				},
+				"callId": {
+					"type": "string",
+					"pattern": "^\\d{8}-[0-9a-f]{12}$"
+				},
+				"occurredAt": {
+					"type": "string",
+					"format": "date-time",
+					"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+				},
+				"from": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 32
+				},
+				"to": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 32
+				},
+				"type": {
+					"type": "string",
+					"const": "ringing"
+				},
+				"acceptBy": {
+					"type": "string",
+					"format": "date-time",
+					"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+				}
+			},
+			"required": [
+				"version",
+				"callId",
+				"occurredAt",
+				"type",
+				"acceptBy"
+			],
+			"additionalProperties": false
+		},
+		{
+			"type": "object",
+			"properties": {
+				"version": {
+					"type": "number",
+					"const": 1
+				},
+				"callId": {
+					"type": "string",
+					"pattern": "^\\d{8}-[0-9a-f]{12}$"
+				},
+				"occurredAt": {
+					"type": "string",
+					"format": "date-time",
+					"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+				},
+				"from": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 32
+				},
+				"to": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 32
+				},
+				"type": {
+					"type": "string",
+					"const": "accepted"
+				},
+				"via": {
+					"type": "string",
+					"minLength": 1
+				},
+				"by": {
+					"type": "string",
+					"minLength": 1
+				}
+			},
+			"required": [
+				"version",
+				"callId",
+				"occurredAt",
+				"type",
+				"via"
+			],
+			"additionalProperties": false
+		},
+		{
+			"type": "object",
+			"properties": {
+				"version": {
+					"type": "number",
+					"const": 1
+				},
+				"callId": {
+					"type": "string",
+					"pattern": "^\\d{8}-[0-9a-f]{12}$"
+				},
+				"occurredAt": {
+					"type": "string",
+					"format": "date-time",
+					"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+				},
+				"from": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 32
+				},
+				"to": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 32
+				},
+				"type": {
+					"type": "string",
+					"const": "missed"
+				},
+				"reason": {
+					"type": "string",
+					"enum": [
+						"timeout",
+						"caller_hung_up"
+					]
+				}
+			},
+			"required": [
+				"version",
+				"callId",
+				"occurredAt",
+				"type",
+				"reason"
+			],
+			"additionalProperties": false
+		},
+		{
+			"type": "object",
+			"properties": {
+				"version": {
+					"type": "number",
+					"const": 1
+				},
+				"callId": {
+					"type": "string",
+					"pattern": "^\\d{8}-[0-9a-f]{12}$"
+				},
+				"occurredAt": {
+					"type": "string",
+					"format": "date-time",
+					"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+				},
+				"from": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 32
+				},
+				"to": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 32
+				},
+				"type": {
+					"type": "string",
+					"const": "busy"
+				},
+				"activeCallId": {
+					"type": "string",
+					"pattern": "^\\d{8}-[0-9a-f]{12}$"
+				}
+			},
+			"required": [
+				"version",
+				"callId",
+				"occurredAt",
+				"type",
+				"activeCallId"
+			],
+			"additionalProperties": false
+		},
+		{
+			"type": "object",
+			"properties": {
+				"version": {
+					"type": "number",
+					"const": 1
+				},
+				"callId": {
+					"type": "string",
+					"pattern": "^\\d{8}-[0-9a-f]{12}$"
+				},
+				"occurredAt": {
+					"type": "string",
+					"format": "date-time",
+					"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+				},
+				"from": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 32
+				},
+				"to": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 32
+				},
+				"type": {
+					"type": "string",
+					"const": "ended"
+				},
+				"reason": {
+					"type": "string",
+					"enum": [
+						"playback_finished",
+						"caller_hung_up",
+						"abandoned"
+					]
+				}
+			},
+			"required": [
+				"version",
+				"callId",
+				"occurredAt",
+				"type",
+				"reason"
+			],
+			"additionalProperties": false
+		}
+	]
+}

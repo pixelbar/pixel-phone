@@ -4,6 +4,7 @@
  * all set or none. Errors name the setting, never its value.
  */
 import { z } from "zod";
+import { type ApiKey, parseApiKeys } from "./http/api-keys.ts";
 
 export const ENVIRONMENTS = ["local", "dev", "prod"] as const;
 export type Environment = (typeof ENVIRONMENTS)[number];
@@ -20,9 +21,14 @@ const schema = z.object({
 	PIXEL_PHONE_VERSION: text.default("dev"),
 	PIXEL_PHONE_GIT_SHA: text.optional(),
 
+	// How long after a call arrives someone may still accept it (ADR 0004).
+	ACCEPT_WINDOW_SECONDS: z.coerce.number().int().min(5).max(120).default(15),
+
 	// Telnyx Call Control (secrets: telnyx-api-key, telnyx-public-key)
 	TELNYX_API_KEY: text.optional(),
 	TELNYX_PUBLIC_KEY: text.optional(),
+	// Local only: where Call Control commands go (the harness's fake Telnyx, #17).
+	TELNYX_API_URL: z.url({ protocol: /^https?$/ }).optional(),
 
 	// Home Assistant (secret: home-assistant-token)
 	HOME_ASSISTANT_URL: z.url({ protocol: /^https?$/ }).optional(),
@@ -42,13 +48,21 @@ const schema = z.object({
 	// Azure, set by Terraform on the Container App
 	AZURE_CLIENT_ID: text.optional(),
 	AZURE_STORAGE_ACCOUNT_NAME: text.optional(),
+	// Local only: Azurite (`UseDevelopmentStorage=true`). Azure uses the account name and
+	// the app's managed identity instead.
+	AZURE_STORAGE_CONNECTION_STRING: text.optional(),
 	PHONE_EVENTS_QUEUE: text.default("phone-events"),
 	MEDIA_CONTAINER: text.default("media"),
+	// The accept recording's blob in MEDIA_CONTAINER (ADR 0008). MP3 or WAV.
+	RECORDING_ACCEPTED: z
+		.string()
+		.regex(/^[\w.-]+\.(mp3|wav)$/, { error: "must be a .mp3 or .wav blob name" })
+		.default("accepted.mp3"),
 });
 
 type Env = z.infer<typeof schema>;
 
-export type TelnyxConfig = { apiKey: string; publicKey: string };
+export type TelnyxConfig = { apiKey: string; publicKey: string; apiUrl?: string };
 export type HomeAssistantConfig = { url: string; token: string; ringingEntity: string };
 export type SentryConfig = {
 	dsn: string;
@@ -62,14 +76,18 @@ export type Config = {
 	port: number;
 	logLevel: LogLevel;
 	version: string;
+	acceptWindowSeconds: number;
+	recordingAccepted: string;
 	gitSha?: string;
 	telnyx?: TelnyxConfig;
 	homeAssistant?: HomeAssistantConfig;
-	apiKeysYaml?: string;
+	/** The accept API's callers, from API_KEYS_YAML. */
+	apiKeys?: ApiKey[];
 	sentry?: SentryConfig;
 	azure: {
 		clientId?: string;
 		storageAccount?: string;
+		storageConnectionString?: string;
 		eventsQueue: string;
 		mediaContainer: string;
 	};
@@ -137,6 +155,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 			`HOME_ASSISTANT_RINGING_ENTITY must be a _dev helper outside prod (PIXEL_PHONE_ENV=${data.PIXEL_PHONE_ENV})`,
 		);
 	}
+	let apiKeys: ApiKey[] | undefined;
+	if (data.API_KEYS_YAML !== undefined) {
+		try {
+			apiKeys = parseApiKeys(data.API_KEYS_YAML);
+		} catch (error) {
+			problems.push((error as Error).message);
+		}
+	}
+	if (data.PIXEL_PHONE_ENV !== "local") {
+		if (data.AZURE_STORAGE_ACCOUNT_NAME === undefined) {
+			problems.push(`AZURE_STORAGE_ACCOUNT_NAME must be set in ${data.PIXEL_PHONE_ENV}`);
+		}
+		if (data.TELNYX_API_URL !== undefined) problems.push("TELNYX_API_URL is for local runs only");
+		if (data.AZURE_STORAGE_CONNECTION_STRING !== undefined) {
+			problems.push("AZURE_STORAGE_CONNECTION_STRING is for local runs only");
+		}
+	}
 	if (problems.length > 0) {
 		throw new ConfigError(`Invalid configuration:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
 	}
@@ -147,9 +182,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		port: data.PORT,
 		logLevel: data.LOG_LEVEL,
 		version: data.PIXEL_PHONE_VERSION,
+		acceptWindowSeconds: data.ACCEPT_WINDOW_SECONDS,
+		recordingAccepted: data.RECORDING_ACCEPTED,
 		...(data.PIXEL_PHONE_GIT_SHA ? { gitSha: data.PIXEL_PHONE_GIT_SHA } : {}),
 		...(telnyx && data.TELNYX_API_KEY && data.TELNYX_PUBLIC_KEY
-			? { telnyx: { apiKey: data.TELNYX_API_KEY, publicKey: data.TELNYX_PUBLIC_KEY } }
+			? {
+					telnyx: {
+						apiKey: data.TELNYX_API_KEY,
+						publicKey: data.TELNYX_PUBLIC_KEY,
+						...(data.TELNYX_API_URL ? { apiUrl: data.TELNYX_API_URL } : {}),
+					},
+				}
 			: {}),
 		...(homeAssistant &&
 		data.HOME_ASSISTANT_URL &&
@@ -163,12 +206,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 					},
 				}
 			: {}),
-		...(data.API_KEYS_YAML ? { apiKeysYaml: data.API_KEYS_YAML } : {}),
+		...(apiKeys ? { apiKeys } : {}),
 		...(sentry ? { sentry } : {}),
 		azure: {
 			...(data.AZURE_CLIENT_ID ? { clientId: data.AZURE_CLIENT_ID } : {}),
 			...(data.AZURE_STORAGE_ACCOUNT_NAME
 				? { storageAccount: data.AZURE_STORAGE_ACCOUNT_NAME }
+				: {}),
+			...(data.AZURE_STORAGE_CONNECTION_STRING
+				? { storageConnectionString: data.AZURE_STORAGE_CONNECTION_STRING }
 				: {}),
 			eventsQueue: data.PHONE_EVENTS_QUEUE,
 			mediaContainer: data.MEDIA_CONTAINER,

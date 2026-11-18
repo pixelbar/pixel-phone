@@ -14,6 +14,22 @@ install:
 dev:
     pnpm exec tsx watch --env-file-if-exists=.env --import ./src/instrument.ts src/index.ts
 
+# Start Azurite (local Azure Storage: tables, queues, blobs) in Docker, in the background
+[group('develop')]
+azurite:
+    docker compose up -d --wait azurite
+    @echo "Azurite is up. Use AZURE_STORAGE_CONNECTION_STRING=UseDevelopmentStorage=true"
+
+# Stop Azurite
+[group('develop')]
+azurite-stop:
+    docker compose down
+
+# Simulate a whole doorbell call locally with fakes (needs `just azurite`). `--help` lists options
+[group('develop')]
+simulate-call *args:
+    @node --import tsx scripts/simulate-call.ts {{args}}
+
 # Compile TypeScript to dist/
 [group('develop')]
 build:
@@ -132,6 +148,21 @@ tf-apply env *args:
     terraform -chdir=infra/envs/{{env}} init -backend-config=backend.azurerm.example.hcl -input=false >/dev/null
     terraform -chdir=infra/envs/{{env}} apply -input=false -var-file=terraform.example.tfvars {{args}}
 
+# Recordings: `just media push <env> <file> [--name accepted.mp3]` or `just media list <env>`
+[group('config')]
+media *args:
+    pnpm exec tsx scripts/media.ts {{args}}
+
+# Make a new accept API key for a caller (e.g. home-assistant, pixel) and print its API_KEYS_YAML line
+[group('config')]
+api-key id:
+    @pnpm exec tsx scripts/api-key.ts {{id}}
+
+# Write the call event contract (src/core/events.ts) to docs/events.schema.json for Pixel
+[group('config')]
+events-schema:
+    pnpm exec tsx scripts/events-schema.ts
+
 # Validate infra/secrets.manifest.yaml (names only; no Azure login, no values)
 [group('config')]
 validate-secrets:
@@ -146,6 +177,14 @@ secrets-pull env *args:
 [group('config')]
 secrets-push env *args:
     pnpm exec tsx scripts/secrets-sync.ts push {{env}} {{args}}
+
+# Make the env's Telnyx Call Control application and numbers match config/telnyx.<env>.yaml.
+# Shows a diff and asks first. --dry-run only shows; --check exits 1 on drift; --yes skips
+# the question; --from-vault reads TELNYX_API_KEY from Key Vault instead of .env.<env>.
+[group('config')]
+[doc("Make Telnyx match config/telnyx.<env>.yaml (--dry-run, --check, --yes, --from-vault)")]
+telnyx-sync env *args:
+    pnpm exec tsx scripts/telnyx-sync.ts {{env}} {{args}}
 
 # Restart that env's Container App so it reads its secrets again
 [group('config')]
@@ -185,7 +224,7 @@ deploy env:
     fi
     app="$(az containerapp show -g pixel-phone-dev -n pixel-phone-dev --query "properties.template.containers[0].env[?name=='PIXEL_PHONE_ENV'].value | [0]" -o tsv)"
     if [ "$app" != dev ]; then echo "pixel-phone-dev doesn't say PIXEL_PHONE_ENV=dev (got '$app'). Refusing." >&2; exit 1; fi
-    az containerapp update -g pixel-phone-dev -n pixel-phone-dev --image "$image:$tag" --min-replicas 0 --max-replicas 1 --only-show-errors -o none
+    az containerapp update -g pixel-phone-dev -n pixel-phone-dev --image "$image:$tag" --min-replicas 1 --max-replicas 1 --only-show-errors -o none
     fqdn="$(az containerapp show -g pixel-phone-dev -n pixel-phone-dev --query properties.configuration.ingress.fqdn -o tsv)"
     echo "Rolled pixel-phone-dev to $image:$tag"
     for i in $(seq 1 30); do

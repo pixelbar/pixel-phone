@@ -45,20 +45,210 @@ To set or change one:
 | | dev | prod |
 | --- | --- | --- |
 | Number | `+31103024128` (until prod has its own, #21) | not ordered yet |
-| Call Control application | `pixel-phone-dev` | `pixel-phone-prod` (#20) |
+| Call Control application | `Pixel Phone` (made in the portal) | `pixel-phone-prod` (#20) |
 | Webhook URL | `https://pixel-phone-dev.ashysky-f402cc54.westeurope.azurecontainerapps.io/webhooks/telnyx` | `https://phone.pixelbar.nl/webhooks/telnyx` |
 
-### Pointing a number at an environment
+### `just telnyx-sync`: the application and numbers as code
 
-Until `just telnyx-sync` (#8) does this, it's done in the Telnyx portal:
+[`config/telnyx.<env>.yaml`](../config) says what the Telnyx side should be: the application's name, its numbers, and (for prod) the webhook host. `just telnyx-sync <env>` makes Telnyx match ([ADR 0007](adr/0007-telnyx-config-by-script.md)):
 
-1. **Voice → Programmable Voice → Call Control Applications → Add new App**, named `pixel-phone-dev`.
-2. **Webhook URL:** the environment's URL above, method POST, **API version 2**.
-3. Turn **first command timeout off**. pixel-phone sends no command until someone accepts (ADR 0002), and Telnyx must not drop a call that is waiting.
-4. Save, then **Numbers → My Numbers → the number → Connection or App:** choose `pixel-phone-dev`.
-5. **Keys & Credentials → Public Key:** copy the account's Ed25519 public key into `.env.dev` as `TELNYX_PUBLIC_KEY`. Webhook signatures are checked against it from #9 onwards.
-6. Call the number. The dev logs should show `telnyx.webhook_stub` with `eventType: call.initiated`. Until #10 nothing answers, so the call just rings.
+- the application's webhook URL is `https://<host>/webhooks/telnyx` (and a failover URL if `failover_host` is set), API version 2, **first command timeout off**, active, and an inbound channel limit of 2;
+- every listed number points at that application.
+
+It reads `TELNYX_API_KEY` from `.env.<env>` (or Key Vault with `--from-vault`) and the host from the Container App (`az containerapp show`) unless the file sets `host`. It prints what would change and asks first. It never prints the key.
+
+| Command | What it does |
+| --- | --- |
+| `just telnyx-sync dev --dry-run` | Shows what would change, writes nothing |
+| `just telnyx-sync dev` | Shows the change and asks before writing |
+| `just telnyx-sync dev --check` | Exits 1 if someone changed something in the portal (drift) |
+| `just telnyx-sync dev --yes` | Writes without asking (dev only; prod also needs `PIXEL_PHONE_SYNC_PROD=1`) |
+
+**Run it** after the environment's hostname changes (a new Container App, or `phone.pixelbar.nl` for prod), after adding or moving a number in `config/telnyx.<env>.yaml`, and whenever `--check` reports drift. Running it twice changes nothing the second time.
+
+**Public key:** webhook signatures are checked against the account's Ed25519 public key (**Keys & Credentials → Public Key** in the portal), stored as `telnyx-public-key`. The sync doesn't manage it; it changes only if Telnyx rotates it.
+
+### Webhooks
+
+Every request to `/webhooks/telnyx` must carry a valid Ed25519 signature (`telnyx-signature-ed25519` over `telnyx-timestamp|body`) made within the last five minutes. What the logs say:
+
+| Log `event` | Meaning |
+| --- | --- |
+| `telnyx.webhook` | A verified event, handed to the call flow |
+| `telnyx.webhook_duplicate` | Telnyx sent an event ID again; acknowledged, not handled twice |
+| `telnyx.webhook_rejected` (`reason`) | 401. `bad_signature`: wrong `TELNYX_PUBLIC_KEY`, or not Telnyx. `stale_timestamp`: replay, or the clock is off. `missing_headers`: not Telnyx |
+| `telnyx.webhook_ignored` (debug) | A Telnyx event type we don't act on |
+| `telnyx.webhook_unconfigured` | 503: Telnyx isn't configured (`telnyx_enabled` off) |
+
+**Every webhook is rejected with `bad_signature`:** the public key in Key Vault doesn't match the account. Copy it again from **Keys & Credentials → Public Key**, `just secrets-push dev`, `just restart dev`.
+
+Event IDs are kept in the `WebhookEvents` table for two days, then pruned.
+
+## Testing locally
+
+`just azurite`, then `just simulate-call [options]` (see the [README](../README.md#try-it-first)). It runs the real app with a fresh test key pair, a fake Telnyx and a fake Home Assistant, and Azurite for storage. Nothing leaves the laptop. `HARNESS_DEBUG=1` also prints the app's own log lines. CI runs six scenarios on every pull request.
+
+If a run says "no outcome" with no `call.ringing`, the app dropped the webhook: run with `HARNESS_DEBUG=1`. To start from empty storage, `just azurite-stop && just azurite`.
+
+## Testing a real call on dev
+
+What has to be in place, once:
+
+| | How | Check |
+| --- | --- | --- |
+| The app is deployed | `just deploy dev` (or **Deploy dev** for a branch) | `curl https://<dev url>/version` shows the commit |
+| Telnyx points at dev | `just telnyx-sync dev` | `just telnyx-sync dev --check` passes |
+| A recording | `just media push dev media/placeholder-accepted.wav --name accepted.wav` | `just media list dev` |
+| An accept key | `just api-key home-assistant` → `API_KEYS_YAML` in `.env.dev` → `just secrets-push dev`; `accept_api_enabled = true`; `just tf-apply dev` | `curl -X POST -H "Authorization: Bearer $KEY" https://<dev url>/api/v1/calls/current/accept` answers 404 |
+| Home Assistant (optional) | [Connecting an environment](#connecting-an-environment) | the `_dev` helper flips during a call |
+
+Then:
+
+1. **Missed call.** Call `+31103024128` from a phone and don't accept. You hear ringing; after 15 s nothing changes (no command was sent), and the logs show `call.ringing` then `call.missed` (`reason: timeout`). Hang up.
+2. **Caller hangs up.** Call, hang up within 15 s: `call.missed` with `reason: caller_hung_up`.
+3. **Accepted.** Call, and within 15 s run the accept `curl` above. It answers `202 {"callId":…}`; the phone is picked up and plays the test recording, then hangs up. Logs: `call.ringing`, `accept.accepted`, `call.accepted`, `call.answered_by_telnyx`, `call.ended` (`reason: playback_finished`).
+4. **Too late.** Call, wait 16 s, accept: `410`, and the phone keeps ringing.
+5. **Busy.** While one call rings, call from a second phone: `call.busy`; the second call just rings.
+
+Reading the logs:
+
+```sh
+az containerapp logs show -g pixel-phone-dev -n pixel-phone-dev --follow --format text | grep -E '"event":"(call|accept|telnyx|home-assistant|queue|media)\.'
+```
+
+Every outcome is one `call.<outcome>` line with `callId`, `from`, `to` and `via`/`by`. A failing dependency is `<area>.failed` and a Sentry issue tagged `area`.
+
+## Calls
+
+Each call is a row in the `Calls` table: partition = the UTC day, row = the call ID (`20261118-3f9a1c2b7d4e`). Rows are kept 90 days. The states are in the [README](../README.md#call-states).
+
+| Status | Meaning |
+| --- | --- |
+| `ringing` | Waiting for an accept. No command has been sent to Telnyx |
+| `accepting` | Someone accepted: answered, playing the recording |
+| `ended` | `endedReason`: `playback_finished` (normal), `caller_hung_up` (during the recording), `abandoned` (no Telnyx event for 3 minutes after the accept) |
+| `missed` | `missedReason`: `timeout` (nobody accepted within `ACCEPT_WINDOW_SECONDS`) or `caller_hung_up`. Never answered, so OpenR moved on |
+| `busy` | Arrived while another call was active. Never answered: it rings out and OpenR moves on |
+
+**One call at a time.** A second doorbell call while one is `ringing` or `accepting` is `busy` and gets no command, so OpenR moves on to its next number. We don't send a SIP busy: OpenR only moves on after *no answer*, and a busy might not count (decided for #11).
+
+**Stuck calls can't block the doorbell.** A `ringing` call past its window, or an `accepting` call with no event for 3 minutes, is retired when the next call arrives and on startup.
+
+**OpenR's ring time per number** bounds how long anyone has to accept: if it is shorter than `ACCEPT_WINDOW_SECONDS` (15 s), OpenR gives up first. **Not measured yet.** To measure: call the dev number from OpenR (press the doorbell with only the dev number on its list), don't accept, and read the gap between `call.initiated` and `call.hangup` in the logs. Record it here.
+
+### Looking at calls
+
+```sh
+az storage entity query --account-name pixelphonedevst --auth-mode login -t Calls \
+  --filter "PartitionKey eq '$(date -u +%Y-%m-%d)'" -o table
+```
+
+## Recordings
+
+The only recording is the accept recording ("someone is on their way to let you in"), played after someone accepts ([ADR 0008](adr/0008-recordings-in-blob-storage.md)). It lives in the environment's private `media` container; `RECORDING_ACCEPTED` names the blob (`recording_accepted` in Terraform, default `accepted.mp3`). For each accepted call the app signs a read-only URL that lasts 15 minutes and hands it to Telnyx. Nothing is public.
+
+| Command | What it does |
+| --- | --- |
+| `just media push dev <file> --name accepted.mp3` | Uploads (or replaces) a recording, after checking it's MP3 or WAV and the name's extension matches. Prod asks first |
+| `just media list dev` | Lists the recordings |
+
+Changing a recording needs **no deploy**: the next accepted call plays the new file. Changing its *name* is a Terraform change (`recording_accepted`) and `just tf-apply`.
+
+**dev** plays the committed test recording, [`media/placeholder-accepted.wav`](../media/placeholder-accepted.wav) (a synthetic voice saying it's a test):
+
+```sh
+just media push dev media/placeholder-accepted.wav --name accepted.wav
+```
+
+**At startup** the app checks the recording exists. If not, it logs `media.failed` ("accept recording … is missing") and reports it to Sentry, and still starts: a call can still be accepted, but the caller hears silence before we hang up.
+
+Checking a URL by hand (needs the maintainer role, which can also sign):
+
+```sh
+az storage blob generate-sas --account-name pixelphonedevst --container-name media --name accepted.wav \
+  --permissions r --expiry $(date -u -v+15M +%Y-%m-%dT%H:%MZ) --auth-mode login --as-user --full-uri -o tsv
+```
+
+## The accept API
+
+`POST /api/v1/calls/current/accept` (Home Assistant's button) and `POST /api/v1/calls/{callId}/accept` (Pixel), with `Authorization: Bearer <key>`. Responses are in [docs/events.md](events.md#the-accept-api) and [docs/openapi.yaml](openapi.yaml).
+
+### Giving a caller a key
+
+1. `just api-key home-assistant` prints a line like `- { id: home-assistant, key: … }`. It writes nothing.
+2. Add the line to `API_KEYS_YAML` in `.env.dev`, keeping the other callers' lines. As one line: `API_KEYS_YAML='[{ id: home-assistant, key: … }, { id: pixel, key: … }]'`.
+3. `just secrets-push dev`. The first time, also set `accept_api_enabled = true` in `infra/envs/dev/terraform.example.tfvars` and `just tf-apply dev`; otherwise `just restart dev`.
+4. Give the key to the caller: Home Assistant's `secrets.yaml`, or Pixel's Key Vault. Never in chat or an issue.
+
+**Rotating:** make a new key for the same id, replace its line, push, restart, then update the caller. The old key stops working at the restart.
+
+**Logs:** `accept.accepted` (with `via`, `by`, `callId`), `accept.already_accepted`, `accept.too_late`, `accept.no_call`, `accept.unauthorized` (a bad key; at most 30 lines a minute per address), `accept.rate_limited`. Keys are never logged.
+
+### Trying it
+
+```sh
+curl -sS -X POST -H "Authorization: Bearer $KEY" \
+  https://pixel-phone-dev.ashysky-f402cc54.westeurope.azurecontainerapps.io/api/v1/calls/current/accept
+```
+
+With nothing ringing that answers `404 {"error":"no ringing call"}`, which proves the key works.
+
+## Pixel and the queue
+
+pixel-phone publishes call events to the `phone-events` queue; Pixel reads them. The contract is [docs/events.md](events.md). Messages expire after five minutes.
+
+Peek without taking them (needs the maintainer read role from `just tf-apply dev`):
+
+```sh
+az storage message peek --queue-name phone-events --account-name pixelphonedevst \
+  --auth-mode login --num-messages 32 -o json | jq -r '.[].content'
+```
+
+A publish has three seconds. A failure is logged as `queue.failed` and sent to Sentry (`area: queue`); Home Assistant still rings. If both fail, the call rings out and OpenR moves on.
+
+Changing the contract: edit `src/core/events.ts`, `just events-schema`, update `docs/events.md`, and tell Pixel's maintainers. A breaking change is a new `version`.
 
 ## Home Assistant
 
+Home Assistant owns the siren ([ADR 0005](adr/0005-home-assistant-owns-the-siren.md)). pixel-phone only turns a helper on while a call rings and off when it stops ringing; Home Assistant's own automations decide whether the siren sounds, and may turn the helper off themselves.
+
+| | dev | prod |
+| --- | --- | --- |
+| Helper | `input_boolean.pixel_phone_ringing_dev` (nothing is attached to it) | `input_boolean.pixel_phone_ringing` |
+| URL | the Nabu Casa URL, `home_assistant_url` in `infra/envs/<env>/terraform.example.tfvars` | same |
+
+Config refuses a non-`_dev` helper outside prod, and Terraform pins dev's helper.
+
+### Connecting an environment
+
+1. In Home Assistant, **Settings → Devices & services → Helpers → Create helper → Toggle**, named `pixel_phone_ringing_dev` (so its ID is `input_boolean.pixel_phone_ringing_dev`).
+2. **Settings → People → Users → Add user** `pixel-phone` (not an administrator). Log in as it once, then **Profile → Security → Long-lived access tokens → Create token**.
+3. Put the token in `.env.dev` as `HOME_ASSISTANT_TOKEN`, then `just secrets-push dev`.
+4. Set `home_assistant_url` in `infra/envs/dev/terraform.example.tfvars` and `just tf-apply dev`.
+5. Check: `curl -sS -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"entity_id":"input_boolean.pixel_phone_ringing_dev"}' https://<nabu casa url>/api/services/input_boolean/turn_on` flips the helper on. Turn it off the same way.
+
+Each call has three seconds and no retry. A failure is logged as `home-assistant.failed` and sent to Sentry with the tag `area: home-assistant`; the call still reaches Pixel through the queue.
+
+Without `home_assistant_url`, pixel-phone logs `ringer.off` instead of ringing.
+
+| `home-assistant.failed` says | Fix |
+| --- | --- |
+| `401 (is HOME_ASSISTANT_TOKEN valid?)` | The token was revoked or mistyped: make a new one (step 2), push, restart |
+| `400` / `404 (does input_boolean… exist…)` | The helper is missing or renamed (step 1) |
+| `didn't get through (TimeoutError)` | Home Assistant or Nabu Casa is down or slow |
+
 ## When the doorbell doesn't ring
+
+Work from the outside in. Nothing here ever answers a call by itself: doing nothing lets the call ring out and OpenR try its next number.
+
+| Symptom | Look at | Likely cause and fix |
+| --- | --- | --- |
+| No `telnyx.webhook` lines at all | `curl https://<url>/healthz`; Telnyx portal → the app → webhook URL; `just telnyx-sync <env> --check` | App down (roll back, see [Deploying](#deploying)), or the webhook URL drifted (`just telnyx-sync <env>`) |
+| `telnyx.webhook_rejected` with `bad_signature` | Key Vault `telnyx-public-key` | Public key wrong: copy it from the portal, `just secrets-push`, `just restart` |
+| `call.busy` for every call | `Calls` table: is a call stuck `ringing`/`accepting`? | Stuck calls retire on their own (15 s / 3 min). If not, `just restart <env>` recovers them |
+| `call.ringing` but no siren | `home-assistant.failed` lines | Token or helper (see [Home Assistant](#home-assistant)). If HA flipped the helper, it's HA's automation |
+| `call.ringing` but nothing in Discord | `queue.failed` lines; Pixel's logs | Queue unreachable, or Pixel isn't polling |
+| Accept answers 202 but the phone isn't picked up | `telnyx.failed` with `during: answer` | Telnyx API key wrong or expired; the call rings out. Fix the key, push, restart |
+| Picked up but silent, then hangs up | `media.failed` | Recording missing (`just media list`) or the app can't sign URLs (Storage Blob Delegator) |
+| `call.missed` with `caller_hung_up` straight away | The caller hung up, or OpenR's ring time is short | See OpenR's ring time under [Calls](#calls) |
+

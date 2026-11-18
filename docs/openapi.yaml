@@ -1,0 +1,108 @@
+openapi: 3.1.0
+info:
+  title: pixel-phone accept API
+  version: "1"
+  description: |
+    Accepting a doorbell call makes pixel-phone answer it and play the accept
+    recording. Callers: Home Assistant's button (`current`) and Pixel (by call ID).
+    See docs/events.md for the events that announce calls.
+servers:
+  - url: https://pixel-phone-dev.ashysky-f402cc54.westeurope.azurecontainerapps.io
+    description: dev
+  - url: https://phone.pixelbar.nl
+    description: prod
+security:
+  - bearer: []
+paths:
+  /api/v1/calls/current/accept:
+    post:
+      summary: Accept the call ringing now
+      operationId: acceptCurrent
+      requestBody:
+        $ref: "#/components/requestBodies/Accept"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/AlreadyAccepted" }
+        "410": { $ref: "#/components/responses/TooLate" }
+        "429": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /api/v1/calls/{callId}/accept:
+    post:
+      summary: Accept a call by its ID (from a ringing event)
+      operationId: acceptCall
+      parameters:
+        - name: callId
+          in: path
+          required: true
+          schema: { type: string, pattern: "^\\d{8}-[0-9a-f]{12}$" }
+      requestBody:
+        $ref: "#/components/requestBodies/Accept"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/AlreadyAccepted" }
+        "410": { $ref: "#/components/responses/TooLate" }
+        "429": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: A key from API_KEYS_YAML. Its id (home-assistant, pixel) is recorded as `via`.
+  requestBodies:
+    Accept:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              by:
+                type: string
+                maxLength: 100
+                description: Who pressed it, e.g. discord:123. Recorded, not trusted.
+  responses:
+    Accepted:
+      description: Accepted. pixel-phone is answering the call.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [callId]
+            properties:
+              callId: { type: string }
+    AlreadyAccepted:
+      description: Someone accepted first.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+              callId: { type: string }
+              via: { type: string }
+              by: { type: string }
+    TooLate:
+      description: The accept window has passed, or the call is over.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+              callId: { type: string }
+    Error:
+      description: "400 bad body, 401 bad key, 404 no ringing call, 429 too many requests, 503 not configured"
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }

@@ -52,6 +52,7 @@ locals {
       AZURE_STORAGE_ACCOUNT_NAME = azurerm_storage_account.this.name
       PHONE_EVENTS_QUEUE         = local.queue_name
       MEDIA_CONTAINER            = local.media_name
+      RECORDING_ACCEPTED         = var.recording_accepted
     },
     var.home_assistant_url != null ? { HOME_ASSISTANT_URL = var.home_assistant_url } : {},
     var.home_assistant_ringing_entity != null ? { HOME_ASSISTANT_RINGING_ENTITY = var.home_assistant_ringing_entity } : {},

@@ -1,0 +1,6 @@
+# What `just telnyx-sync prod` makes the Telnyx side look like (ADR 0007).
+# prod has no number yet (#21) and no Container App yet (#20).
+
+application: pixel-phone-prod
+host: phone.pixelbar.nl
+numbers: []

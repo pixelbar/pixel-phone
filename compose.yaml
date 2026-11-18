@@ -1,0 +1,13 @@
+# Local stand-ins for Azure, for `just dev`, the tests and `just simulate-call`.
+# `just azurite` starts it. Nothing here is a secret: Azurite's account key is the
+# documented development key, and only works against Azurite.
+name: pixel-phone
+
+services:
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.37.0
+    command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck --loose
+    ports:
+      - "127.0.0.1:10000:10000" # blobs
+      - "127.0.0.1:10001:10001" # queues
+      - "127.0.0.1:10002:10002" # tables
