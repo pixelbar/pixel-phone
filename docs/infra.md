@@ -57,7 +57,7 @@ The storage account has **shared keys off**, so every data access needs an Azure
 | GitHub `pixel-phone-github-ENV` | Contributor | resource group `pixel-phone-ENV` |
 | GitHub `pixel-phone-github-ENV` | Storage Blob Data Contributor | state container `pixel-phone-ENV` |
 
-Maintainers are listed by name in each environment's `maintainer_principal_ids` (in `terraform.example.tfvars`), not taken from whoever runs Terraform, so a plan from CI and an apply from any laptop agree. To add one, add their Entra ID object ID there and apply.
+Maintainers are listed by name in each environment's `maintainer_principal_ids` (in the env's `terraform.tfvars`, shared with `just pull` / `just push`), not taken from whoever runs Terraform, so an apply from any laptop agrees. To add one, add their Entra ID object ID there, push and apply. Add them to `terraform.example.tfvars` too, so CI's plan of dev matches.
 
 ## Images
 

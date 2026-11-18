@@ -124,17 +124,23 @@ tf-bootstrap *args:
     terraform -chdir=infra/bootstrap init -backend-config=backend.azurerm.example.hcl -input=false >/dev/null
     terraform -chdir=infra/bootstrap {{args}}
 
-# Plan an env stack (dev or prod). Needs Azure CLI signed in. Does not apply.
+# Plan an env stack (dev or prod) with its terraform.tfvars (`just pull <env>` first).
+# Needs Azure CLI signed in. Does not apply.
 [group('terraform')]
+[doc("Plan an env stack with its terraform.tfvars (just pull <env> first). Does not apply")]
 tf-plan env *args:
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{env}}" in dev|prod) ;; *) echo "env must be dev or prod" >&2; exit 1 ;; esac
+    if [ ! -f infra/envs/{{env}}/terraform.tfvars ]; then
+      echo "infra/envs/{{env}}/terraform.tfvars is missing. Run just pull {{env}} (the first time: copy terraform.example.tfvars, then just push {{env}})." >&2
+      exit 1
+    fi
     terraform -chdir=infra/envs/{{env}} init -backend-config=backend.azurerm.example.hcl -input=false >/dev/null
-    terraform -chdir=infra/envs/{{env}} plan -input=false -var-file=terraform.example.tfvars {{args}}
+    terraform -chdir=infra/envs/{{env}} plan -input=false {{args}}
 
-# Apply an env stack. Maintainers only, from a laptop. Coding agents must not apply
-# prod: it refuses unless PIXEL_PHONE_APPLY_PROD=1.
+# Apply an env stack with its terraform.tfvars. Maintainers only, from a laptop. Coding
+# agents must not apply prod: it refuses unless PIXEL_PHONE_APPLY_PROD=1.
 [group('terraform')]
 [doc("Apply an env stack (maintainers only; prod needs PIXEL_PHONE_APPLY_PROD=1)")]
 tf-apply env *args:
@@ -145,8 +151,12 @@ tf-apply env *args:
       echo "Refusing to apply prod without PIXEL_PHONE_APPLY_PROD=1." >&2
       exit 1
     fi
+    if [ ! -f infra/envs/{{env}}/terraform.tfvars ]; then
+      echo "infra/envs/{{env}}/terraform.tfvars is missing. Run just pull {{env}} (the first time: copy terraform.example.tfvars, then just push {{env}})." >&2
+      exit 1
+    fi
     terraform -chdir=infra/envs/{{env}} init -backend-config=backend.azurerm.example.hcl -input=false >/dev/null
-    terraform -chdir=infra/envs/{{env}} apply -input=false -var-file=terraform.example.tfvars {{args}}
+    terraform -chdir=infra/envs/{{env}} apply -input=false {{args}}
 
 # Recordings: `just media push <env> <file> [--name accepted.mp3]` or `just media list <env>`
 [group('config')]
@@ -167,6 +177,21 @@ events-schema:
 [group('config')]
 validate-secrets:
     pnpm exec tsx scripts/validate-secrets.ts
+
+# Pull an env's settings and secrets from Key Vault: terraform.tfvars into infra/envs/<env>
+# and app secrets into .env.<env>. Shows what changes (the tfvars as a diff, secrets by
+# length only) and asks first. Needs az login. See docs/runbook.md#terraform-settings.
+[group('config')]
+[doc("Pull an env's terraform.tfvars and app secrets from Key Vault: `just pull dev|prod`")]
+pull env:
+    pnpm exec tsx scripts/secrets-sync.ts pull {{env}} --all
+
+# Push an env's terraform.tfvars and app secrets to Key Vault after showing the diff. Refuses
+# a tfvars that sets a secret or a variable the stack doesn't declare. Never deletes, never applies.
+[group('config')]
+[doc("Push an env's terraform.tfvars and app secrets to Key Vault: `just push dev|prod`")]
+push env:
+    pnpm exec tsx scripts/secrets-sync.ts push {{env}} --all
 
 # Pull that env's app secrets from Key Vault into .env.<env>, after showing what changes
 [group('config')]

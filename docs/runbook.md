@@ -61,10 +61,10 @@ To set or change one:
 
 1. Put the value in `.env.dev` (or `.env.prod`), with `PIXEL_PHONE_ENV=dev` (or `prod`) in the same file.
 2. `just secrets-push dev`: shows which secrets change (never the values) and asks first. It never deletes.
-3. If the secret's feature is off, turn it on in `infra/envs/dev/terraform.example.tfvars` and `just tf-apply dev`. Turning a feature on before its secrets exist stops new revisions from starting.
+3. If the secret's feature is off, turn it on in `infra/envs/dev/terraform.tfvars` ([Terraform settings](#terraform-settings)), `just push dev` and `just tf-apply dev`. Turning a feature on before its secrets exist stops new revisions from starting.
 4. Otherwise `just restart dev`: the Container App reads secrets when a revision starts.
 
-`just secrets-pull dev` goes the other way, after showing what changes. `just validate-secrets` checks the manifest.
+`just secrets-pull dev` goes the other way, after showing what changes. `just pull dev` and `just push dev` do the same and also sync the Terraform settings. `just validate-secrets` checks the manifest.
 
 **prod never gets dev's values.** `.env.prod` is its own file, and `just secrets-push prod` refuses a file that says `PIXEL_PHONE_ENV=dev`. Prod pushes always ask you to type `prod`.
 
@@ -81,6 +81,30 @@ Each one the same way: put the new value in `.env.<env>`, `just secrets-push <en
 | `sentry-dsn` | Sentry → project `pixel-phone` → **Client Keys (DSN)** → new key | The logs show `process.started` and no Sentry warning; disable the old key in Sentry |
 
 A leaked value: rotate it at once, even in opening hours. The doorbell keeps working through a Telnyx or Home Assistant rotation, because a failure there only means the call rings out.
+
+### Terraform settings
+
+Each environment is applied with its `infra/envs/<env>/terraform.tfvars`: feature switches, `home_assistant_url`, `recording_accepted`, `pixel_principal_id`, the maintainers, prod's `custom_domains`. It is gitignored. Every maintainer gets the same copy from the Key Vault secret `terraform-tfvars` (the manifest's `tooling` group), as Pixel does ([ADR 0012](adr/0012-tfvars-in-key-vault.md)).
+
+| | Local | Shared through | Diff shown |
+| --- | --- | --- | --- |
+| App secrets | `.env.<env>` | Key Vault, one secret each (the `app` group) | No, names and lengths only |
+| Terraform settings | `infra/envs/<env>/terraform.tfvars` | Key Vault secret `terraform-tfvars` (the `tooling` group) | Yes |
+
+To change a setting:
+
+1. `just pull dev`: brings `terraform.tfvars` and `.env.dev` up to date, showing what changes and asking first.
+2. Edit `infra/envs/dev/terraform.tfvars`.
+3. `just push dev`: shows the diff against Key Vault and asks. It re-reads the vault before writing, so a push made by someone else in the meantime stops it, and reads every value back afterwards.
+4. `just tf-plan dev`, then `just tf-apply dev`. A push applies nothing.
+
+For prod, the same with `prod`; pushing asks you to type `prod`.
+
+**`terraform.tfvars` holds settings, never secrets.** App secrets aren't Terraform inputs at all. Should a stack ever need a secret input (a variable marked `sensitive`), it goes in `infra/envs/<env>/secrets.auto.tfvars`: Terraform loads it by itself, it's gitignored, and it never leaves your laptop. `just push` refuses a tfvars that sets a sensitive variable or one the stack doesn't declare (prod's `custom_domains` in dev's file shows it's the wrong one). It checks before showing anything, and the diff hides every sensitive value.
+
+**`terraform.example.tfvars`** stays committed: CI plans dev with it on pull requests, and it's where a new environment starts. Keep it close to dev's real settings so the PR plan means something.
+
+**First time for an environment** (or before its Key Vault exists): `cp infra/envs/<env>/terraform.example.tfvars infra/envs/<env>/terraform.tfvars`, check it, plan and apply. Once the vault exists, `just push <env>` shares it. `just pull` says when Key Vault has no `terraform-tfvars` yet.
 
 ## Telnyx
 
@@ -141,7 +165,7 @@ What has to be in place, once:
 | The app is deployed | `just deploy dev` (or **Deploy dev** for a branch) | `curl https://<dev url>/version` shows the commit |
 | Telnyx points at dev | `just telnyx-sync dev` | `just telnyx-sync dev --check` passes |
 | A recording | `just media push dev media/placeholder-accepted.wav --name accepted.wav` | `just media list dev` |
-| An accept key | `just api-key home-assistant` → `API_KEYS_YAML` in `.env.dev` → `just secrets-push dev`; `accept_api_enabled = true`; `just tf-apply dev` | `curl -X POST -H "Authorization: Bearer $KEY" https://<dev url>/api/v1/calls/current/accept` answers 404 |
+| An accept key | `just api-key home-assistant` → `API_KEYS_YAML` in `.env.dev` → `just secrets-push dev`; `accept_api_enabled = true` in the tfvars, `just push dev`; `just tf-apply dev` | `curl -X POST -H "Authorization: Bearer $KEY" https://<dev url>/api/v1/calls/current/accept` answers 404 |
 | Home Assistant (optional) | [Connecting an environment](home-assistant.md#connecting-an-environment) | the `_dev` helper flips during a call |
 
 Then:
@@ -198,7 +222,7 @@ The only recording is the accept recording ("someone is on their way to let you 
 | `just media push dev <file> --name accepted.mp3` | Uploads (or replaces) a recording, after checking it's MP3 or WAV and the name's extension matches. Prod asks first |
 | `just media list dev` | Lists the recordings |
 
-Changing a recording needs **no deploy**: the next accepted call plays the new file. Changing its *name* is a Terraform change (`recording_accepted`) and `just tf-apply`.
+Changing a recording needs **no deploy**: the next accepted call plays the new file. Changing its *name* is a Terraform setting (`recording_accepted` in the tfvars, [Terraform settings](#terraform-settings)): `just push`, then `just tf-apply`.
 
 **dev** plays the committed test recording, [`media/placeholder-accepted.wav`](../media/placeholder-accepted.wav) (a synthetic voice saying it's a test):
 
@@ -223,7 +247,7 @@ az storage blob generate-sas --account-name pixelphonedevst --container-name med
 
 1. `just api-key home-assistant` prints a line like `- { id: home-assistant, key: … }`. It writes nothing.
 2. Add the line to `API_KEYS_YAML` in `.env.dev`, keeping the other callers' lines. As one line: `API_KEYS_YAML='[{ id: home-assistant, key: … }, { id: pixel, key: … }]'`.
-3. `just secrets-push dev`. The first time, also set `accept_api_enabled = true` in `infra/envs/dev/terraform.example.tfvars` and `just tf-apply dev`; otherwise `just restart dev`.
+3. `just secrets-push dev`. The first time, also set `accept_api_enabled = true` in `infra/envs/dev/terraform.tfvars`, `just push dev` and `just tf-apply dev`; otherwise `just restart dev`.
 4. Give the key to the caller: Home Assistant's `secrets.yaml`, or Pixel's Key Vault. Never in chat or an issue.
 
 **Rotating:** make a new key for the same id, replace its line, push, restart, then update the caller. The old key stops working at the restart.

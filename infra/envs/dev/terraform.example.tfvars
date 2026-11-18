@@ -1,5 +1,7 @@
-# The settings dev is applied with. None of these are secrets; CI plans with
-# this file. Copy to terraform.tfvars (gitignored) only to override something.
+# A starting point for dev's settings, and what CI plans dev with on pull requests.
+# dev is applied with terraform.tfvars (gitignored), shared through Key Vault:
+# `just pull dev`, edit, `just push dev` (docs/runbook.md#terraform-settings).
+# None of these are secrets. Keep this close to dev's real settings.
 
 pixel_principal_id = "c43a84a4-f599-405c-8010-53bff92310dd" # pixel-dev-app
 
